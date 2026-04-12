@@ -1,5 +1,5 @@
-import { createServerClient } from "@supabase/ssr"
-import { NextResponse, type NextRequest } from "next/server"
+import { createServerClient } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -18,9 +18,9 @@ export async function middleware(request: NextRequest) {
           response.cookies.set({ name, value, ...options })
         },
         remove(name: string, options: any) {
-          request.cookies.set({ name, value: "", ...options })
+          request.cookies.set({ name, value: '', ...options })
           response = NextResponse.next({ request: { headers: request.headers } })
-          response.cookies.set({ name, value: "", ...options })
+          response.cookies.set({ name, value: '', ...options })
         },
       },
     }
@@ -28,13 +28,18 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user && !request.nextUrl.pathname.startsWith("/login")) {
-    return NextResponse.redirect(new URL("/login", request.url))
+  const isLoginPage = request.nextUrl.pathname.startsWith('/login')
+  const isRegisterPage = request.nextUrl.pathname.startsWith('/register')
+  const isApiRoute = request.nextUrl.pathname.startsWith('/api')
+  const isPublic = isLoginPage || isRegisterPage || isApiRoute
+
+  if (!user && !isPublic) {
+    return NextResponse.redirect(new URL('/login', request.url))
   }
 
   return response
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/auth).*)"],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 }
