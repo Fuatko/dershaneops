@@ -52,9 +52,9 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
         </nav>
 
         <div style={{ padding: '8px', borderTop: '1px solid #D5DFF0' }}>
-          <Link href="/dashboard" style={{ display: 'block', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', color: '#7A8FA8', textDecoration: 'none' }}>
-            ← Admin Paneline Don
-          </Link>
+        <a href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, color: '#fff', background: '#1B3A6B', textDecoration: 'none', textAlign: 'center', justifyContent: 'center' }}>
+  ← Admin Paneli
+</a>
         </div>
       </aside>
 

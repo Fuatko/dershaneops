@@ -29,7 +29,7 @@ const navGroups = [
   { section: 'Raporlar', links: [
     { href: '/reports', label: 'Raporlar' },
     { href: '/notifications', label: 'Bildirimler' },
-    { href: '/superadmin', label: 'Süper Admin' },
+    { href: '/superadmin', label: '⚙ Süper Admin' },
   ]},
 ]
 
