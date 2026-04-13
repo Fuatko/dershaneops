@@ -22,12 +22,14 @@ const navGroups = [
     section: 'Öğrenci',
     links: [
       { href: '/homework', label: 'Ödev Modülü' },
+    { href: '/teacher', label: 'Öğretmen Paneli' },
       { href: '/swot', label: 'SWOT Analizi' },
       { href: '/veli', label: 'Veli Paneli' },
     ]
   },
   { section: 'Raporlar', links: [
     { href: '/reports', label: 'Raporlar' },
+    { href: '/performance', label: 'Hakimiyet Haritası' },
     { href: '/notifications', label: 'Bildirimler' },
     { href: '/superadmin', label: '⚙ Süper Admin' },
   ]},
