@@ -27,14 +27,40 @@ export async function middleware(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
+  const pathname = request.nextUrl.pathname
 
-  const isLoginPage = request.nextUrl.pathname.startsWith('/login')
-  const isRegisterPage = request.nextUrl.pathname.startsWith('/register')
-  const isApiRoute = request.nextUrl.pathname.startsWith('/api')
-  const isPublic = isLoginPage || isRegisterPage || isApiRoute
+  const isPublic = (
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/register') ||
+    pathname.startsWith('/api') ||
+    pathname.startsWith('/landing') ||
+    pathname === '/'
+  )
 
+  // Giriş yapmamış → login'e yönlendir
   if (!user && !isPublic) {
     return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  // Giriş yapmış → role bazlı yönlendirme
+  if (user && (pathname === '/' || pathname === '/dashboard')) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role, is_super_admin')
+      .eq('user_id', user.id)
+      .single()
+
+    if (profile) {
+      if (profile.is_super_admin) {
+        if (pathname === '/') return NextResponse.redirect(new URL('/dashboard', request.url))
+      } else if (profile.role === 'student') {
+        return NextResponse.redirect(new URL('/student-panel', request.url))
+      } else if (profile.role === 'teacher') {
+        return NextResponse.redirect(new URL('/teacher-panel', request.url))
+      } else if (profile.role === 'parent') {
+        return NextResponse.redirect(new URL('/parent-panel', request.url))
+      }
+    }
   }
 
   return response
