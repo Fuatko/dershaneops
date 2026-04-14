@@ -73,6 +73,11 @@ export default function SwotPage() {
 
   return (
     <div style={{ padding: '28px', maxWidth: '900px' }}>
+  <div style={{ marginBottom: '16px' }}>
+    <a href="/dashboard" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', background: '#1B3A6B', color: '#fff', fontSize: '12.5px', fontWeight: 600, textDecoration: 'none' }}>
+      ← Ana Panele Dön
+    </a>
+  </div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
           <a href="/homework" style={{ fontSize: '12px', color: '#7A8FA8', textDecoration: 'none' }}>Odevlerim</a>

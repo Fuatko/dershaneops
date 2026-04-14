@@ -32,6 +32,9 @@ const navGroups = [
     { href: '/performance', label: 'Hakimiyet Haritası' },
     { href: '/risk', label: 'Risk Analizi' },
     { href: '/studyplan', label: 'Calisma Plani' },
+    { href: '/questions', label: 'Soru Girişi' },
+    { href: '/teacherdecision', label: 'Öğretmen Destek' },
+    { href: '/parentreport', label: 'Veli Raporu' },
     { href: '/notifications', label: 'Bildirimler' },
     { href: '/superadmin', label: '⚙ Süper Admin' },
   ]},
@@ -100,6 +103,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           ))}
         </nav>
 
+{/* Ana Sayfa Butonu */}
+<div style={{ padding: '8px', borderTop: '1px solid #D5DFF0' }}>
+  <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '10px', borderRadius: '8px', background: '#1B3A6B', color: '#fff', fontSize: '12.5px', fontWeight: 700, textDecoration: 'none' }}>
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <path d="M9 11.5L3.5 7 9 2.5" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+    Ana Panele Dön
+  </Link>
+</div>
         {/* Kullanıcı */}
         <div style={{ padding: '10px 8px', borderTop: '1px solid #D5DFF0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '8px 12px', borderRadius: '8px', background: '#F0F4F9', marginBottom: '4px' }}>
