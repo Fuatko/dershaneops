@@ -30,6 +30,8 @@ const navGroups = [
   { section: 'Raporlar', links: [
     { href: '/reports', label: 'Raporlar' },
     { href: '/performance', label: 'Hakimiyet Haritası' },
+    { href: '/risk', label: 'Risk Analizi' },
+    { href: '/studyplan', label: 'Calisma Plani' },
     { href: '/notifications', label: 'Bildirimler' },
     { href: '/superadmin', label: '⚙ Süper Admin' },
   ]},
