@@ -35,6 +35,7 @@ const navGroups = [
     { href: '/questions', label: 'Soru Girişi' },
     { href: '/teacherdecision', label: 'Öğretmen Destek' },
     { href: '/parentreport', label: 'Veli Raporu' },
+    { href: '/profile', label: 'Gelişim Profili' },
     { href: '/notifications', label: 'Bildirimler' },
     { href: '/superadmin', label: '⚙ Süper Admin' },
   ]},
