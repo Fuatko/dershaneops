@@ -103,6 +103,75 @@ export default function TestSolvePage({ params }: PageProps) {
       .update({ status: 'completed' })
       .eq('id', params.testId)
 
+      // Konu performansını güncelle
+try {
+  const bookSubject = test?.chapters?.books?.subject
+  if (bookSubject) {
+    const { data: subjectData } = await supabase
+      .from('subjects')
+      .select('id')
+      .ilike('name', '%' + bookSubject + '%')
+      .limit(1)
+      .single()
+
+    const correct = Object.entries(answers).filter(([q, ans]) => {
+      const key = keys.find((k: any) => k.question_no === parseInt(q))?.correct_answer
+      return key && ans === key
+    }).length
+    const wrong = Object.entries(answers).filter(([q, ans]) => {
+      const key = keys.find((k: any) => k.question_no === parseInt(q))?.correct_answer
+      return key && ans !== key && ans !== 'BK'
+    }).length
+    const blank = Object.values(answers).filter(ans => ans === 'BK').length
+    const totalQ = test?.question_count ?? 0
+
+    await supabase.from('student_question_attempts').insert({
+      tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
+      student_id: assignment.student_id,
+      subject_id: subjectData?.id ?? null,
+      attempt_date: new Date().toISOString().slice(0, 10),
+      total_questions: totalQ,
+      correct_count: correct,
+      wrong_count: wrong,
+      blank_count: blank,
+      difficulty_level: 'medium',
+      source_type: 'homework',
+    })
+
+    if (subjectData?.id) {
+      const { data: existing } = await supabase
+        .from('student_topic_performance')
+        .select('id, accuracy_rate')
+        .eq('student_id', assignment.student_id)
+        .eq('subject_id', subjectData.id)
+        .is('topic_id', null)
+        .single()
+
+      const acc = totalQ > 0 ? Math.round(correct / totalQ * 100 * 100) / 100 : 0
+      const mastery = Math.round((acc * 0.70 + 3.0) * 100) / 100
+      const trend = existing ? (acc > existing.accuracy_rate ? 'up' : acc < existing.accuracy_rate ? 'down' : 'stable') : 'stable'
+
+      await supabase.from('student_topic_performance').upsert({
+        tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
+        student_id: assignment.student_id,
+        subject_id: subjectData.id,
+        topic_id: null,
+        total_questions: totalQ,
+        correct_count: correct,
+        wrong_count: wrong,
+        blank_count: blank,
+        accuracy_rate: acc,
+        mastery_score: mastery,
+        last_attempt_date: new Date().toISOString().slice(0, 10),
+        attempt_count: 1,
+        trend_direction: trend,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'student_id,subject_id,topic_id' })
+    }
+  }
+} catch (err) {
+  console.error('Performans güncelleme hatası:', err)
+}
     setSubmitted(true)
     calcResults(assignment, answers)
     setLoading(false)
