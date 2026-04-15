@@ -2,42 +2,30 @@
 export const dynamic = 'force-dynamic'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 
 export default function NewParentPage() {
-  const [form, setForm] = useState({ full_name: '', email: '', phone: '', password: '' })
+  const [form, setForm] = useState({ full_name: '', email: '', phone: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
-  const supabase = createClient()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.full_name || !form.email || !form.password) { setError('Ad, e-posta ve şifre zorunludur.'); return }
+    if (!form.full_name || !form.email) { setError('Ad soyad ve e-posta zorunludur.'); return }
     setSaving(true)
     setError('')
 
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: form.email,
-      password: form.password,
-      options: { data: { full_name: form.full_name } }
+    const res = await fetch('/api/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...form, role: 'parent' })
     })
+    const d = await res.json()
 
-    if (authError) { setError(authError.message); setSaving(false); return }
-
-    if (authData.user) {
-      await supabase.from('profiles').upsert({
-        user_id: authData.user.id,
-        full_name: form.full_name,
-        email: form.email,
-        phone: form.phone || null,
-        role: 'parent',
-        tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
-      })
-    }
+    if (!d.ok) { setError(d.error); setSaving(false); return }
 
     setSuccess(true)
-    setForm({ full_name: '', email: '', phone: '', password: '' })
+    setForm({ full_name: '', email: '', phone: '' })
     setSaving(false)
   }
 
@@ -52,6 +40,12 @@ export default function NewParentPage() {
         <span style={{ fontSize: '12.5px', color: '#1B3A6B', fontWeight: 600 }}>Yeni Veli</span>
       </div>
 
+      <div style={{ background: '#EEF3FB', border: '1px solid #BFDBFE', borderRadius: '10px', padding: '12px 16px', marginBottom: '20px' }}>
+        <div style={{ fontSize: '12.5px', color: '#1B3A6B', lineHeight: 1.6 }}>
+          Veli e-posta adresine <strong>davet maili</strong> gönderilecek. Veli maildeki linke tıklayarak şifresini belirleyip giriş yapabilecek.
+        </div>
+      </div>
+
       <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '24px' }}>
         <div style={{ fontSize: '15px', fontWeight: 700, color: '#1B3A6B', marginBottom: '20px' }}>Veli Bilgileri</div>
         <form onSubmit={handleSubmit}>
@@ -63,13 +57,9 @@ export default function NewParentPage() {
             <label style={lbl}>E-posta *</label>
             <input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="ahmet@email.com" style={inp} required />
           </div>
-          <div style={{ marginBottom: '14px' }}>
+          <div style={{ marginBottom: '20px' }}>
             <label style={lbl}>Telefon</label>
             <input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} placeholder="0532 xxx xx xx" style={inp} />
-          </div>
-          <div style={{ marginBottom: '20px' }}>
-            <label style={lbl}>Şifre *</label>
-            <input type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder="En az 6 karakter" style={inp} required minLength={6} />
           </div>
 
           {error && (
@@ -77,13 +67,14 @@ export default function NewParentPage() {
           )}
           {success && (
             <div style={{ background: '#EAF4EE', border: '1px solid #A7D9B8', borderRadius: '8px', padding: '10px 14px', marginBottom: '14px', fontSize: '12.5px', color: '#2E7D52', fontWeight: 600 }}>
-              Veli başarıyla eklendi! <a href="/parents" style={{ color: '#1B3A6B' }}>Veli listesine dön →</a>
+              Davet maili gönderildi!{' '}
+              <a href="/parents" style={{ color: '#1B3A6B' }}>Listeye dön →</a>
             </div>
           )}
 
           <div style={{ display: 'flex', gap: '10px' }}>
             <button type="submit" disabled={saving} style={{ flex: 1, padding: '11px', borderRadius: '9px', background: '#1B3A6B', color: '#fff', fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
-              {saving ? 'Kaydediliyor...' : 'Veli Ekle'}
+              {saving ? 'Davet Gönderiliyor...' : 'Davet Gönder'}
             </button>
             <a href="/parents" style={{ padding: '11px 18px', borderRadius: '9px', background: '#F0F4F9', color: '#4A6080', fontSize: '13px', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
               İptal
