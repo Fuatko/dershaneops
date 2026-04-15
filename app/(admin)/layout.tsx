@@ -10,6 +10,8 @@ const navGroups = [
   { section: 'Tanımlar', links: [
     { href: '/students', label: 'Öğrenciler' },
     { href: '/teachers', label: 'Öğretmenler' },
+    { href: '/parents', label: 'Veliler' },
+    { href: '/parent-match', label: 'Veli Eşleştirme' },
     { href: '/books', label: 'Kitap Kütüphanesi' },
     { href: '/books/assign', label: 'Ödev Ata' },
   ]},
