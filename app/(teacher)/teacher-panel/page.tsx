@@ -409,4 +409,119 @@ export default function TeacherPanelPage() {
                                 <div style={{ width: '16px', height: '16px', borderRadius: '4px', border: '2px solid', borderColor: isSelected ? '#1B3A6B' : '#D5DFF0', background: isSelected ? '#1B3A6B' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                   {isSelected && <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1.5 4.5l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                                 </div>
-                                <div
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontSize: '12.5px', fontWeight: 600, color: '#1B3A6B' }}>{test.name}</div>
+                                  <div style={{ fontSize: '11px', color: '#7A8FA8' }}>{test.question_count} soru</div>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+              <div style={{ alignSelf: 'flex-start', position: 'sticky', top: '20px' }}>
+                <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '18px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B', marginBottom: '14px' }}>Ödev Ayarları</div>
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={lbl}>Öğrenci *</label>
+                    <select value={selectedAssignStudent} onChange={e => setSelectedAssignStudent(e.target.value)} style={{ width: '100%', padding: '8px 10px', borderRadius: '7px', border: '1px solid #D5DFF0', fontSize: '12.5px', color: '#1B3A6B', outline: 'none', background: '#fff' }}>
+                      <option value="">Öğrenci seçin...</option>
+                      {students.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={lbl}>Son Teslim</label>
+                    <input type="date" value={assignDeadline} onChange={e => setAssignDeadline(e.target.value)} style={{ width: '100%', padding: '8px 10px', borderRadius: '7px', border: '1px solid #D5DFF0', fontSize: '12.5px', color: '#1B3A6B', outline: 'none', background: '#fff', boxSizing: 'border-box' }} />
+                  </div>
+                  <div style={{ background: '#F0F4F9', borderRadius: '8px', padding: '10px', marginBottom: '12px', fontSize: '12px', color: '#4A6080' }}>
+                    {selectedTests.length} test seçildi
+                  </div>
+                  {assignSuccess && (
+                    <div style={{ background: '#EAF4EE', border: '1px solid #A7D9B8', borderRadius: '8px', padding: '9px 12px', marginBottom: '10px', fontSize: '12px', color: '#2E7D52', fontWeight: 600 }}>
+                      Ödev atandı!
+                    </div>
+                  )}
+                  <button onClick={handleAssign} disabled={assigning || selectedTests.length === 0 || !selectedAssignStudent} style={{ width: '100%', padding: '10px', borderRadius: '8px', background: selectedTests.length > 0 && selectedAssignStudent ? '#1B3A6B' : '#D5DFF0', color: '#fff', fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
+                    {assigning ? 'Atanıyor...' : 'Ödev Ata'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'students' && (
+          <div style={{ maxWidth: '900px' }}>
+            <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', marginBottom: '20px' }}>Öğrencilerim</h1>
+            {students.length === 0 ? (
+              <div style={{ background: '#FDF4E7', border: '1px solid #FED7AA', borderRadius: '12px', padding: '40px', textAlign: 'center' }}>
+                <div style={{ fontSize: '13px', color: '#B45309' }}>Henüz öğrenci atanmamış</div>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                {students.map(s => {
+                  const sLessons = lessons.filter(l => l.student_id === s.id)
+                  const sAttempts = recentAttempts.filter(a => a.student_id === s.id)
+                  return (
+                    <div key={s.id} style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '18px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+                        <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#E2EAF8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700, color: '#1B3A6B', flexShrink: 0 }}>
+                          {s.full_name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '14px', fontWeight: 700, color: '#1B3A6B' }}>{s.full_name}</div>
+                          <div style={{ fontSize: '11.5px', color: '#7A8FA8' }}>Öğrenci</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: '8px' }}>
+                        {[
+                          { label: 'Toplam Ders', value: sLessons.length, color: '#1B3A6B' },
+                          { label: 'Soru Girişi', value: sAttempts.length, color: '#B45309' },
+                        ].map(m => (
+                          <div key={m.label} style={{ background: '#F5F8FF', borderRadius: '8px', padding: '8px', textAlign: 'center' }}>
+                            <div style={{ fontSize: '16px', fontWeight: 700, color: m.color }}>{m.value}</div>
+                            <div style={{ fontSize: '10px', color: '#7A8FA8' }}>{m.label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'lessons' && (
+          <div style={{ maxWidth: '900px' }}>
+            <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', marginBottom: '20px' }}>Tüm Derslerim ({lessons.length})</h1>
+            <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', overflow: 'hidden' }}>
+              {lessons.length === 0 ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#7A8FA8' }}>Ders kaydı yok</div>
+              ) : lessons.map((l, i) => {
+                const STATUS: any = {
+                  completed: { bg: '#EAF4EE', color: '#2E7D52', label: 'Tamamlandı' },
+                  scheduled: { bg: '#EEF3FB', color: '#1B3A6B', label: 'Planlandı' },
+                  cancelled: { bg: '#FEF2F2', color: '#C0392B', label: 'İptal' },
+                }
+                const st = STATUS[l.status] ?? STATUS.scheduled
+                return (
+                  <div key={l.id} style={{ padding: '13px 18px', borderBottom: i < lessons.length - 1 ? '1px solid #F0F4F9' : 'none', display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#1B3A6B', marginBottom: '2px' }}>{l.subject}</div>
+                      <div style={{ fontSize: '11.5px', color: '#7A8FA8' }}>{l.profiles?.full_name} — {new Date(l.scheduled_at).toLocaleDateString('tr-TR')}</div>
+                    </div>
+                    <span style={{ fontSize: '11px', fontWeight: 600, padding: '3px 9px', borderRadius: '20px', background: st.bg, color: st.color }}>{st.label}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  )
+}
