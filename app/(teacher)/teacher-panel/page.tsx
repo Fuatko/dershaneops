@@ -4,8 +4,6 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-const DAYS = ['', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar']
-
 export default function TeacherPanelPage() {
   const [profile, setProfile] = useState<any>(null)
   const [students, setStudents] = useState<any[]>([])
@@ -15,6 +13,7 @@ export default function TeacherPanelPage() {
   const [recentAttempts, setRecentAttempts] = useState<any[]>([])
   const [books, setBooks] = useState<any[]>([])
   const [bookChapters, setBookChapters] = useState<any[]>([])
+  const [homework, setHomework] = useState<any[]>([])
   const [selectedBook, setSelectedBook] = useState('')
   const [selectedAssignStudent, setSelectedAssignStudent] = useState('')
   const [selectedTests, setSelectedTests] = useState<string[]>([])
@@ -34,12 +33,10 @@ export default function TeacherPanelPage() {
   const supabase = createClient()
 
   useEffect(() => { load() }, [])
-
   useEffect(() => {
     if (form.subject_id) loadTopics(form.subject_id)
     else setTopics([])
   }, [form.subject_id])
-
   useEffect(() => {
     if (selectedBook) loadBookChapters(selectedBook)
     else setBookChapters([])
@@ -52,20 +49,26 @@ export default function TeacherPanelPage() {
     if (!p) { setLoading(false); return }
     setProfile(p)
     const { data: l } = await supabase.from('lessons').select('*, profiles!lessons_student_id_fkey(full_name)').eq('teacher_id', p.id).order('scheduled_at', { ascending: false })
-    const { data: s } = await supabase
-  .from('profiles')
-  .select('id, full_name')
-  .eq('role', 'student')
-  .order('full_name')
-const studentsData = s ?? []
+    const { data: s } = await supabase.from('profiles').select('id, full_name').eq('role', 'student').order('full_name')
     const { data: sub } = await supabase.from('subjects').select('*').order('name')
     const { data: ra } = await supabase.from('student_question_attempts').select('*, profiles!student_question_attempts_student_id_fkey(full_name), topics(name), subjects(name)').eq('teacher_id', p.id).order('created_at', { ascending: false }).limit(15)
     const { data: bks } = await supabase.from('books').select('id, name, subject, color').order('name')
+    const studentIds = (s ?? []).map((x: any) => x.id)
+    let hw: any[] = []
+    if (studentIds.length > 0) {
+      const { data: hwData } = await supabase
+        .from('homework_assignments')
+        .select('*, profiles!homework_assignments_student_id_fkey(full_name), tests(name, chapters(name, books(name)))')
+        .in('student_id', studentIds)
+        .order('created_at', { ascending: false })
+      hw = hwData ?? []
+    }
     setLessons(l ?? [])
-    setStudents(studentsData)
+    setStudents(s ?? [])
     setSubjects(sub ?? [])
     setRecentAttempts(ra ?? [])
     setBooks(bks ?? [])
+    setHomework(hw)
     setLoading(false)
   }
 
@@ -112,6 +115,7 @@ const studentsData = s ?? []
     setSelectedTests([])
     setSelectedAssignStudent('')
     setAssignDeadline('')
+    await load()
     setAssigning(false)
   }
 
@@ -163,6 +167,13 @@ const studentsData = s ?? []
     setSaving(false)
   }
 
+  async function resetHomework(id: string) {
+    if (!confirm('Bu ödevi sıfırlamak istediğinizden emin misiniz?')) return
+    await supabase.from('student_answers').delete().eq('assignment_id', id)
+    await supabase.from('homework_assignments').update({ status: 'pending' }).eq('id', id)
+    await load()
+  }
+
   async function signOut() {
     await supabase.auth.signOut()
     window.location.href = '/login'
@@ -172,14 +183,13 @@ const studentsData = s ?? []
   const upcomingLessons = lessons.filter(l => new Date(l.scheduled_at) >= today && l.status === 'scheduled').slice(0, 5)
   const total = form.correct_count + form.wrong_count + form.blank_count
   const accuracy = total > 0 ? Math.round(form.correct_count / total * 100) : 0
-
   const inp: React.CSSProperties = { width: '100%', padding: '8px 10px', borderRadius: '7px', border: '1px solid #D5DFF0', fontSize: '12.5px', color: '#1B3A6B', outline: 'none', background: '#fff', boxSizing: 'border-box' }
   const lbl: React.CSSProperties = { display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#4A6080', marginBottom: '5px' }
-
   const TABS = [
     { id: 'dashboard', label: 'Ana Sayfa' },
     { id: 'questions', label: 'Soru Girişi' },
     { id: 'assign', label: 'Ödev Ata' },
+    { id: 'homework', label: 'Ödev Takibi' },
     { id: 'students', label: 'Öğrencilerim' },
     { id: 'lessons', label: 'Derslerim' },
   ]
@@ -216,7 +226,7 @@ const studentsData = s ?? []
             </div>
           </div>
         )}
-        <nav style={{ flex: 1, padding: '8px' }}>
+        <nav style={{ flex: 1, padding: '8px', overflowY: 'auto' }}>
           {TABS.map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 12px', borderRadius: '8px', marginBottom: '2px', fontSize: '13px', fontWeight: activeTab === tab.id ? 600 : 500, color: activeTab === tab.id ? '#1B3A6B' : '#4A6080', background: activeTab === tab.id ? '#E2EAF8' : 'transparent', borderLeft: activeTab === tab.id ? '3px solid #1B3A6B' : '3px solid transparent', border: 'none', cursor: 'pointer' }}>
               {tab.label}
@@ -242,8 +252,8 @@ const studentsData = s ?? []
               {[
                 { label: 'Öğrenci', value: students.length, color: '#1B3A6B', bg: '#EEF3FB' },
                 { label: 'Yaklaşan Ders', value: upcomingLessons.length, color: '#2E7D52', bg: '#EAF4EE' },
-                { label: 'Toplam Ders', value: lessons.length, color: '#6B4FC8', bg: '#F0ECFB' },
-                { label: 'Soru Girişi', value: recentAttempts.length, color: '#B45309', bg: '#FDF4E7' },
+                { label: 'Bekleyen Ödev', value: homework.filter(h => h.status !== 'completed').length, color: '#B45309', bg: '#FDF4E7' },
+                { label: 'Tamamlanan Ödev', value: homework.filter(h => h.status === 'completed').length, color: '#6B4FC8', bg: '#F0ECFB' },
               ].map(m => (
                 <div key={m.label} style={{ background: m.bg, borderRadius: '10px', padding: '14px 16px' }}>
                   <div style={{ fontSize: '11px', color: m.color, fontWeight: 600, marginBottom: '4px' }}>{m.label}</div>
@@ -268,25 +278,21 @@ const studentsData = s ?? []
                 ))}
               </div>
               <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '18px' }}>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B', marginBottom: '12px' }}>Son Soru Girişleri</div>
-                {recentAttempts.length === 0 ? (
-                  <div style={{ fontSize: '12px', color: '#7A8FA8' }}>Henüz giriş yok</div>
-                ) : recentAttempts.slice(0, 5).map((a, i) => {
-                  const rate = a.total_questions > 0 ? Math.round(a.correct_count / a.total_questions * 100) : 0
-                  return (
-                    <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '7px 0', borderBottom: i < 4 ? '1px solid #F0F4F9' : 'none' }}>
-                      <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: rate >= 70 ? '#EAF4EE' : rate >= 50 ? '#FDF4E7' : '#FEF2F2', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 800, color: rate >= 70 ? '#2E7D52' : rate >= 50 ? '#B45309' : '#C0392B', flexShrink: 0 }}>
-                        %{rate}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '12px', fontWeight: 600, color: '#1B3A6B' }}>{a.profiles?.full_name}</div>
-                        <div style={{ fontSize: '11px', color: '#7A8FA8' }}>{a.subjects?.name}{a.topics?.name ? ' — ' + a.topics.name : ''}</div>
-                      </div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B', marginBottom: '12px' }}>Son Ödevler</div>
+                {homework.slice(0, 5).map((h, i) => (
+                  <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '7px 0', borderBottom: i < 4 ? '1px solid #F0F4F9' : 'none' }}>
+                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: h.status === 'completed' ? '#2E7D52' : '#B45309', flexShrink: 0 }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '12px', fontWeight: 600, color: '#1B3A6B' }}>{h.profiles?.full_name}</div>
+                      <div style={{ fontSize: '11px', color: '#7A8FA8' }}>{h.tests?.name}</div>
                     </div>
-                  )
-                })}
-                <button onClick={() => setActiveTab('questions')} style={{ marginTop: '10px', fontSize: '12px', color: '#1B3A6B', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                  Yeni giriş yap →
+                    <span style={{ fontSize: '10.5px', fontWeight: 600, padding: '2px 7px', borderRadius: '8px', background: h.status === 'completed' ? '#EAF4EE' : '#FDF4E7', color: h.status === 'completed' ? '#2E7D52' : '#B45309' }}>
+                      {h.status === 'completed' ? 'Tamam' : 'Bekliyor'}
+                    </span>
+                  </div>
+                ))}
+                <button onClick={() => setActiveTab('homework')} style={{ marginTop: '10px', fontSize: '12px', color: '#1B3A6B', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                  Tümünü gör →
                 </button>
               </div>
             </div>
@@ -453,18 +459,60 @@ const studentsData = s ?? []
           </div>
         )}
 
+        {activeTab === 'homework' && (
+          <div style={{ maxWidth: '900px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', margin: 0 }}>Ödev Takibi</h1>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <span style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '8px', background: '#FDF4E7', color: '#B45309', fontWeight: 600 }}>Bekleyen: {homework.filter(h => h.status !== 'completed').length}</span>
+                <span style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '8px', background: '#EAF4EE', color: '#2E7D52', fontWeight: 600 }}>Tamamlanan: {homework.filter(h => h.status === 'completed').length}</span>
+              </div>
+            </div>
+            <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', overflow: 'hidden' }}>
+              {homework.length === 0 ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#7A8FA8' }}>Henüz ödev atanmamış</div>
+              ) : homework.map((h, i) => {
+                const isDone = h.status === 'completed'
+                const isLate = !isDone && h.deadline && new Date(h.deadline) < new Date()
+                return (
+                  <div key={h.id} style={{ padding: '13px 18px', borderBottom: i < homework.length - 1 ? '1px solid #F0F4F9' : 'none', display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <div style={{ width: '36px', height: '36px', borderRadius: '9px', background: isDone ? '#EAF4EE' : '#EEF3FB', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, color: isDone ? '#2E7D52' : '#1B3A6B', flexShrink: 0 }}>
+                      {isDone ? '✓' : '—'}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#1B3A6B', marginBottom: '2px' }}>{h.tests?.name}</div>
+                      <div style={{ fontSize: '11.5px', color: '#7A8FA8' }}>
+                        {h.profiles?.full_name} • {h.tests?.chapters?.books?.name}
+                        {h.deadline && ` • Son: ${new Date(h.deadline).toLocaleDateString('tr-TR')}`}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: '11.5px', fontWeight: 600, padding: '3px 10px', borderRadius: '20px', background: isDone ? '#EAF4EE' : isLate ? '#FEF2F2' : '#FDF4E7', color: isDone ? '#2E7D52' : isLate ? '#C0392B' : '#B45309' }}>
+                      {isDone ? 'Tamamlandı' : isLate ? 'Gecikti' : 'Bekliyor'}
+                    </span>
+                    {isDone && (
+                      <button onClick={() => resetHomework(h.id)} style={{ padding: '5px 10px', borderRadius: '6px', border: '1px solid #BFDBFE', background: '#EEF3FB', color: '#1B3A6B', fontSize: '11px', fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
+                        Sıfırla
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {activeTab === 'students' && (
           <div style={{ maxWidth: '900px' }}>
             <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', marginBottom: '20px' }}>Öğrencilerim</h1>
             {students.length === 0 ? (
               <div style={{ background: '#FDF4E7', border: '1px solid #FED7AA', borderRadius: '12px', padding: '40px', textAlign: 'center' }}>
-                <div style={{ fontSize: '13px', color: '#B45309' }}>Henüz öğrenci atanmamış</div>
+                <div style={{ fontSize: '13px', color: '#B45309' }}>Henüz öğrenci yok</div>
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                 {students.map(s => {
                   const sLessons = lessons.filter(l => l.student_id === s.id)
-                  const sAttempts = recentAttempts.filter(a => a.student_id === s.id)
+                  const sHw = homework.filter(h => h.student_id === s.id)
                   return (
                     <div key={s.id} style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '18px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
@@ -476,10 +524,11 @@ const studentsData = s ?? []
                           <div style={{ fontSize: '11.5px', color: '#7A8FA8' }}>Öğrenci</div>
                         </div>
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: '8px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '8px' }}>
                         {[
-                          { label: 'Toplam Ders', value: sLessons.length, color: '#1B3A6B' },
-                          { label: 'Soru Girişi', value: sAttempts.length, color: '#B45309' },
+                          { label: 'Ders', value: sLessons.length, color: '#1B3A6B' },
+                          { label: 'Ödev', value: sHw.length, color: '#B45309' },
+                          { label: 'Tamam', value: sHw.filter(h => h.status === 'completed').length, color: '#2E7D52' },
                         ].map(m => (
                           <div key={m.label} style={{ background: '#F5F8FF', borderRadius: '8px', padding: '8px', textAlign: 'center' }}>
                             <div style={{ fontSize: '16px', fontWeight: 700, color: m.color }}>{m.value}</div>
