@@ -52,12 +52,12 @@ export default function TeacherPanelPage() {
     if (!p) { setLoading(false); return }
     setProfile(p)
     const { data: l } = await supabase.from('lessons').select('*, profiles!lessons_student_id_fkey(full_name)').eq('teacher_id', p.id).order('scheduled_at', { ascending: false })
-    const studentIds = [...new Set((l ?? []).map((x: any) => x.student_id))]
-    let studentsData: any[] = []
-    if (studentIds.length > 0) {
-      const { data: s } = await supabase.from('profiles').select('id, full_name').in('id', studentIds)
-      studentsData = s ?? []
-    }
+    const { data: s } = await supabase
+  .from('profiles')
+  .select('id, full_name')
+  .eq('role', 'student')
+  .order('full_name')
+const studentsData = s ?? []
     const { data: sub } = await supabase.from('subjects').select('*').order('name')
     const { data: ra } = await supabase.from('student_question_attempts').select('*, profiles!student_question_attempts_student_id_fkey(full_name), topics(name), subjects(name)').eq('teacher_id', p.id).order('created_at', { ascending: false }).limit(15)
     const { data: bks } = await supabase.from('books').select('id, name, subject, color').order('name')
