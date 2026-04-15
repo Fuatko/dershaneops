@@ -18,6 +18,14 @@ export default function TeacherPanelPage() {
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
   const [form, setForm] = useState({
+    const [books, setBooks] = useState<any[]>([])
+    const [bookChapters, setBookChapters] = useState<any[]>([])
+    const [selectedBook, setSelectedBook] = useState('')
+    const [selectedAssignStudent, setSelectedAssignStudent] = useState('')
+    const [selectedTests, setSelectedTests] = useState<string[]>([])
+    const [assignDeadline, setAssignDeadline] = useState('')
+    const [assigning, setAssigning] = useState(false)
+    const [assignSuccess, setAssignSuccess] = useState(false)
     student_id: '', subject_id: '', topic_id: '',
     attempt_date: new Date().toISOString().slice(0, 10),
     correct_count: 0, wrong_count: 0, blank_count: 0,
@@ -31,6 +39,10 @@ export default function TeacherPanelPage() {
     if (form.subject_id) loadTopics(form.subject_id)
     else setTopics([])
   }, [form.subject_id])
+  useEffect(() => {
+    if (selectedBook) loadBookChapters(selectedBook)
+    else setBookChapters([])
+  }, [selectedBook])
 
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -64,6 +76,8 @@ export default function TeacherPanelPage() {
     setLessons(l ?? [])
     setStudents(studentsData)
     setSubjects(sub ?? [])
+    const { data: bks } = await supabase.from('books').select('id, name, subject, color').order('name')
+setBooks(bks ?? [])
     setRecentAttempts(ra ?? [])
     setLoading(false)
   }
@@ -127,6 +141,51 @@ export default function TeacherPanelPage() {
     setSaving(false)
   }
 
+  async function loadBookChapters(bookId: string) {
+    const { data } = await supabase
+      .from('books')
+      .select('*, chapters(*, tests(*))')
+      .eq('id', bookId)
+      .single()
+    setBookChapters(data?.chapters ?? [])
+    setSelectedTests([])
+  }
+  
+  function toggleAssignTest(testId: string) {
+    setSelectedTests(prev =>
+      prev.includes(testId) ? prev.filter(id => id !== testId) : [...prev, testId]
+    )
+  }
+  
+  function toggleAssignChapter(chapter: any) {
+    const testIds = chapter.tests?.map((t: any) => t.id) ?? []
+    const allSelected = testIds.every((id: string) => selectedTests.includes(id))
+    if (allSelected) {
+      setSelectedTests(prev => prev.filter(id => !testIds.includes(id)))
+    } else {
+      setSelectedTests(prev => [...new Set([...prev, ...testIds])])
+    }
+  }
+  
+  async function handleAssign() {
+    if (!selectedAssignStudent || selectedTests.length === 0) { alert('Öğrenci ve test seçin!'); return }
+    setAssigning(true)
+    setAssignSuccess(false)
+    const inserts = selectedTests.map(testId => ({
+      student_id: selectedAssignStudent,
+      test_id: testId,
+      deadline: assignDeadline || null,
+      status: 'pending',
+      tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
+    }))
+    const { error } = await supabase.from('homework_assignments').insert(inserts)
+    if (error) { alert('Hata: ' + error.message); setAssigning(false); return }
+    setAssignSuccess(true)
+    setSelectedTests([])
+    setSelectedAssignStudent('')
+    setAssignDeadline('')
+    setAssigning(false)
+  }
   async function signOut() {
     await supabase.auth.signOut()
     window.location.href = '/login'
@@ -141,6 +200,7 @@ export default function TeacherPanelPage() {
   const lbl: React.CSSProperties = { display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#4A6080', marginBottom: '5px' }
 
   const TABS = [
+    { id: 'assign', label: 'Ödev Ata' },
     { id: 'dashboard', label: 'Ana Sayfa' },
     { id: 'questions', label: 'Soru Girişi' },
     { id: 'students', label: 'Öğrencilerim' },
@@ -430,3 +490,81 @@ export default function TeacherPanelPage() {
     </div>
   )
 }
+{activeTab === 'assign' && (
+    <div style={{ maxWidth: '1000px' }}>
+      <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', marginBottom: '20px' }}>Ödev Ata</h1>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '16px' }}>
+        <div>
+          <div style={{ marginBottom: '14px' }}>
+            <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#4A6080', marginBottom: '5px' }}>Kitap Seç</label>
+            <select value={selectedBook} onChange={e => setSelectedBook(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #D5DFF0', fontSize: '13px', color: '#1B3A6B', outline: 'none', background: '#fff' }}>
+              <option value="">Kitap seçin...</option>
+              {books.map(b => <option key={b.id} value={b.id}>{b.name} — {b.subject}</option>)}
+            </select>
+          </div>
+  
+          {bookChapters.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {bookChapters.map(chapter => {
+                const testIds = chapter.tests?.map((t: any) => t.id) ?? []
+                const allSelected = testIds.length > 0 && testIds.every((id: string) => selectedTests.includes(id))
+                return (
+                  <div key={chapter.id} style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', overflow: 'hidden' }}>
+                    <div onClick={() => toggleAssignChapter(chapter)} style={{ padding: '11px 16px', background: '#F5F8FF', borderBottom: '1px solid #D5DFF0', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                      <div style={{ width: '16px', height: '16px', borderRadius: '4px', border: '2px solid', borderColor: allSelected ? '#1B3A6B' : '#D5DFF0', background: allSelected ? '#1B3A6B' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        {allSelected && <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1.5 4.5l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                      </div>
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B', flex: 1 }}>{chapter.name}</span>
+                      <span style={{ fontSize: '11.5px', color: '#7A8FA8' }}>{chapter.tests?.length ?? 0} test</span>
+                    </div>
+                    {(chapter.tests ?? []).map((test: any, i: number) => {
+                      const isSelected = selectedTests.includes(test.id)
+                      return (
+                        <div key={test.id} onClick={() => toggleAssignTest(test.id)} style={{ padding: '10px 16px', borderBottom: i < chapter.tests.length - 1 ? '1px solid #F0F4F9' : 'none', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', background: isSelected ? '#F0F4FF' : '#fff' }}>
+                          <div style={{ width: '16px', height: '16px', borderRadius: '4px', border: '2px solid', borderColor: isSelected ? '#1B3A6B' : '#D5DFF0', background: isSelected ? '#1B3A6B' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            {isSelected && <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1.5 4.5l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: '12.5px', fontWeight: 600, color: '#1B3A6B' }}>{test.name}</div>
+                            <div style={{ fontSize: '11px', color: '#7A8FA8' }}>{test.question_count} soru</div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+  
+        <div style={{ alignSelf: 'flex-start', position: 'sticky', top: '20px' }}>
+          <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '18px' }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B', marginBottom: '14px' }}>Ödev Ayarları</div>
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#4A6080', marginBottom: '5px' }}>Öğrenci *</label>
+              <select value={selectedAssignStudent} onChange={e => setSelectedAssignStudent(e.target.value)} style={{ width: '100%', padding: '8px 10px', borderRadius: '7px', border: '1px solid #D5DFF0', fontSize: '12.5px', color: '#1B3A6B', outline: 'none', background: '#fff' }}>
+                <option value="">Öğrenci seçin...</option>
+                {students.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+              </select>
+            </div>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#4A6080', marginBottom: '5px' }}>Son Teslim</label>
+              <input type="date" value={assignDeadline} onChange={e => setAssignDeadline(e.target.value)} style={{ width: '100%', padding: '8px 10px', borderRadius: '7px', border: '1px solid #D5DFF0', fontSize: '12.5px', color: '#1B3A6B', outline: 'none', background: '#fff', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ background: '#F0F4F9', borderRadius: '8px', padding: '10px', marginBottom: '12px', fontSize: '12px', color: '#4A6080' }}>
+              {selectedTests.length} test seçildi
+            </div>
+            {assignSuccess && (
+              <div style={{ background: '#EAF4EE', border: '1px solid #A7D9B8', borderRadius: '8px', padding: '9px 12px', marginBottom: '10px', fontSize: '12px', color: '#2E7D52', fontWeight: 600 }}>
+                Ödev atandı!
+              </div>
+            )}
+            <button onClick={handleAssign} disabled={assigning || selectedTests.length === 0 || !selectedAssignStudent} style={{ width: '100%', padding: '10px', borderRadius: '8px', background: selectedTests.length > 0 && selectedAssignStudent ? '#1B3A6B' : '#D5DFF0', color: '#fff', fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
+              {assigning ? 'Atanıyor...' : 'Ödev Ata'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )}
