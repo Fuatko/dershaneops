@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     // Supabase Auth'da kullanıcı oluştur ve davet maili gönder
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
       data: { full_name, role },
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/login`,
+      redirectTo: `https://dershaneops.vercel.app/login`,
     })
 
     if (authError) {
