@@ -102,6 +102,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, count })
   } catch (err: any) {
+    // Tüm testlerin question_count'unu güncelle
+await supabase.rpc('update_question_counts')
     return NextResponse.json({ ok: false, error: err.message })
   }
 }
