@@ -32,6 +32,7 @@ const navGroups = [
   ]},
   { section: 'Raporlar', links: [
     { href: '/exams', label: 'Deneme Sınavları' },
+    { href: '/coordinator', label: 'Akademik Koordinatör' },
     { href: '/reports', label: 'Raporlar' },
     { href: '/notifications', label: 'Bildirimler' },
     { href: '/superadmin', label: '⚙ Süper Admin' },
