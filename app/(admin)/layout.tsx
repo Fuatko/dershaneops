@@ -23,6 +23,7 @@ const navGroups = [
   ]},
   { section: 'Akademik', links: [
     { href: '/questions', label: 'Soru Girişi' },
+    { href: '/daily-tasks', label: 'Günlük Görevler' },
     { href: '/performance', label: 'Hakimiyet Haritası' },
     { href: '/risk', label: 'Risk Analizi' },
     { href: '/studyplan', label: 'Çalışma Planı' },
