@@ -133,6 +133,7 @@ await fetch('/api/events', {
     { id: 'homework', label: '📚 Ödevler' },
     { id: 'plan', label: '🗓 Plan' },
     { id: 'goals', label: '🎯 Hedefler' },
+    { id: 'swot', label: '🔍 SWOT' },
   ]
 
   if (loading) return (
@@ -466,6 +467,92 @@ await fetch('/api/events', {
 
         {/* HEDEFLER */}
         {activeTab === 'goals' && (
+            {activeTab === 'swot' && (
+                <div style={{ maxWidth: '700px' }}>
+                  <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', marginBottom: '20px' }}>Akademik SWOT Analizim 🔍</h1>
+                  {topicPerf.length === 0 ? (
+                    <div style={{ background: '#FDF4E7', border: '1px solid #FED7AA', borderRadius: '14px', padding: '40px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '36px', marginBottom: '12px' }}>📊</div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#B45309' }}>Henüz analiz için yeterli veri yok</div>
+                      <div style={{ fontSize: '12px', color: '#7A8FA8', marginTop: '6px' }}>Ödevlerini tamamla ve öğretmenin soru girişi yaptıkça analiz oluşacak</div>
+                    </div>
+                  ) : (
+                    <div>
+                      {/* Metrikler */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '10px', marginBottom: '16px' }}>
+                        {[
+                          { label: 'Genel Başarı', value: '%' + overallRate, color: overallRate >= 70 ? '#2E7D52' : overallRate >= 50 ? '#B45309' : '#C0392B', bg: overallRate >= 70 ? '#EAF4EE' : overallRate >= 50 ? '#FDF4E7' : '#FEF2F2' },
+                          { label: 'Güçlü Konu', value: strongTopics.length, color: '#2E7D52', bg: '#EAF4EE' },
+                          { label: 'Gelişim Alanı', value: weakTopics.length, color: '#C0392B', bg: '#FEF2F2' },
+                        ].map(m => (
+                          <div key={m.label} style={{ background: m.bg, borderRadius: '12px', padding: '14px', textAlign: 'center' }}>
+                            <div style={{ fontSize: '26px', fontWeight: 800, color: m.color }}>{m.value}</div>
+                            <div style={{ fontSize: '11px', color: '#7A8FA8', marginTop: '4px' }}>{m.label}</div>
+                          </div>
+                        ))}
+                      </div>
+              
+                      {/* SWOT Kartları */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div style={{ background: '#EAF4EE', border: '1px solid #D1FAE5', borderRadius: '14px', padding: '16px' }}>
+                          <div style={{ fontSize: '13px', fontWeight: 800, color: '#2E7D52', marginBottom: '10px' }}>💪 Güçlü Yönlerim</div>
+                          {strongTopics.length === 0 ? (
+                            <div style={{ fontSize: '12px', color: '#7A8FA8' }}>Henüz güçlü konu belirlenmedi</div>
+                          ) : strongTopics.slice(0, 4).map(t => (
+                            <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid rgba(0,0,0,0.05)', fontSize: '12.5px', color: '#374151' }}>
+                              <span>{t.subjects?.name} — {t.topics?.name ?? 'Genel'}</span>
+                              <strong style={{ color: '#2E7D52' }}>%{Math.round(t.accuracy_rate)}</strong>
+                            </div>
+                          ))}
+                        </div>
+              
+                        <div style={{ background: '#FEF2F2', border: '1px solid #FEE2E2', borderRadius: '14px', padding: '16px' }}>
+                          <div style={{ fontSize: '13px', fontWeight: 800, color: '#C0392B', marginBottom: '10px' }}>📈 Gelişim Alanlarım</div>
+                          {weakTopics.length === 0 ? (
+                            <div style={{ fontSize: '12px', color: '#2E7D52', fontWeight: 600 }}>Harika! Kritik zayıflık yok.</div>
+                          ) : weakTopics.slice(0, 4).map(t => (
+                            <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid rgba(0,0,0,0.05)', fontSize: '12.5px', color: '#374151' }}>
+                              <span>{t.subjects?.name} — {t.topics?.name ?? 'Genel'}</span>
+                              <strong style={{ color: '#C0392B' }}>%{Math.round(t.accuracy_rate)}</strong>
+                            </div>
+                          ))}
+                        </div>
+              
+                        <div style={{ background: '#FDF4E7', border: '1px solid #FEF3C7', borderRadius: '14px', padding: '16px' }}>
+                          <div style={{ fontSize: '13px', fontWeight: 800, color: '#B45309', marginBottom: '10px' }}>🎯 Fırsatlarım</div>
+                          {topicPerf.filter(t => t.accuracy_rate >= 50 && t.accuracy_rate < 70).length === 0 ? (
+                            <div style={{ fontSize: '12px', color: '#7A8FA8' }}>Orta seviye konu yok</div>
+                          ) : topicPerf.filter(t => t.accuracy_rate >= 50 && t.accuracy_rate < 70).slice(0, 4).map(t => (
+                            <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid rgba(0,0,0,0.05)', fontSize: '12.5px', color: '#374151' }}>
+                              <span>{t.subjects?.name} — {t.topics?.name ?? 'Genel'}</span>
+                              <strong style={{ color: '#B45309' }}>%{Math.round(t.accuracy_rate)}</strong>
+                            </div>
+                          ))}
+                          <div style={{ fontSize: '11px', color: '#B45309', marginTop: '8px', fontStyle: 'italic' }}>
+                            Bu konulara odaklan — hızlı gelişim sağlarsın!
+                          </div>
+                        </div>
+              
+                        <div style={{ background: '#EEF3FB', border: '1px solid #BFDBFE', borderRadius: '14px', padding: '16px' }}>
+                          <div style={{ fontSize: '13px', fontWeight: 800, color: '#1B3A6B', marginBottom: '10px' }}>⚠️ Dikkat Etmem Gerekenler</div>
+                          {riskScore >= 45 ? (
+                            <div style={{ fontSize: '12.5px', color: '#1B3A6B', lineHeight: 1.6 }}>
+                              <div style={{ marginBottom: '6px' }}>Risk skorum: <strong style={{ color: riskScore >= 70 ? '#C0392B' : '#B45309' }}>{Math.round(riskScore)}/100</strong></div>
+                              {weakTopics.length > 0 && <div>• {weakTopics[0].subjects?.name} — {weakTopics[0].topics?.name ?? 'Genel'} konusuna odaklan</div>}
+                              <div>• Düzenli çalışma alışkanlığı kazan</div>
+                              <div>• Öğretmeninden destek iste</div>
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: '12.5px', color: '#2E7D52', fontWeight: 600 }}>
+                              Harika gidiyorsun! Risk seviyesi düşük. Böyle devam et!
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
           <div style={{ maxWidth: '700px' }}>
             <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', marginBottom: '20px' }}>Hedeflerim 🎯</h1>
             {goals.length === 0 ? (
