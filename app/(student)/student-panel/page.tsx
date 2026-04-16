@@ -82,7 +82,22 @@ export default function StudentPanelPage() {
       setCelebration(true)
       setTimeout(() => setCelebration(false), 2500)
     }
-
+// Event tetikle
+const rateAfter = dailyScore >= 95 ? 'high_performance' : 'task_completed'
+await fetch('/api/events', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    student_id: profile.id,
+    event_type: rateAfter,
+    event_data: {
+      student_name: profile.full_name,
+      message: rateAfter === 'high_performance'
+        ? profile.full_name + ' bugün ' + dailyScore + ' puan aldı! Harika performans.'
+        : profile.full_name + ' görevini tamamladı: ' + (task.subjects?.name ?? 'Görev'),
+    }
+  })
+})
     await load()
   }
 
