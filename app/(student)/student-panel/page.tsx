@@ -54,50 +54,31 @@ export default function StudentPanelPage() {
   async function completeTask(taskId: string) {
     const task = dailyTasks.find(t => t.id === taskId)
     if (!task) return
-
     const score = Math.floor(Math.random() * 20) + 80
     await supabase.from('daily_tasks').update({ status: 'completed', completed_at: new Date().toISOString(), score }).eq('id', taskId)
-
-    // Streak güncelle
     const today = new Date().toISOString().slice(0, 10)
-    const existing = streak
-    if (existing) {
-      const lastActive = existing.last_active_date
-      const newStreak = lastActive === today ? existing.current_streak : (lastActive === new Date(Date.now() - 86400000).toISOString().slice(0, 10) ? existing.current_streak + 1 : 1)
-      const newPoints = (existing.total_points ?? 0) + score
-      const newDailyScore = Math.min((existing.daily_score ?? 0) + score, 100)
-      await supabase.from('student_streaks').update({ current_streak: newStreak, longest_streak: Math.max(newStreak, existing.longest_streak ?? 0), last_active_date: today, total_points: newPoints, daily_score: newDailyScore, updated_at: new Date().toISOString() }).eq('student_id', profile.id)
+    if (streak) {
+      const lastActive = streak.last_active_date
+      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+      const newStreak = lastActive === today ? streak.current_streak : (lastActive === yesterday ? streak.current_streak + 1 : 1)
+      const newPoints = (streak.total_points ?? 0) + score
+      const newDailyScore = Math.min((streak.daily_score ?? 0) + score, 100)
+      await supabase.from('student_streaks').update({ current_streak: newStreak, longest_streak: Math.max(newStreak, streak.longest_streak ?? 0), last_active_date: today, total_points: newPoints, daily_score: newDailyScore, updated_at: new Date().toISOString() }).eq('student_id', profile.id)
     } else {
       await supabase.from('student_streaks').insert({ student_id: profile.id, current_streak: 1, longest_streak: 1, last_active_date: today, total_points: score, daily_score: score })
     }
-
-    // Kutlama
+    await fetch('/api/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        student_id: profile.id,
+        event_type: score >= 95 ? 'high_performance' : 'task_completed',
+        event_data: { student_name: profile.full_name, message: profile.full_name + ' görevini tamamladı: ' + (task.subjects?.name ?? 'Görev') }
+      })
+    })
     const remaining = dailyTasks.filter(t => t.status === 'pending' && t.id !== taskId).length
-    if (remaining === 0) {
-      setCelebrationMsg('Tüm görevleri tamamladın! 🎉')
-      setCelebration(true)
-      setTimeout(() => setCelebration(false), 4000)
-    } else if (score >= 95) {
-      setCelebrationMsg('Mükemmel! ' + score + ' puan! ⭐')
-      setCelebration(true)
-      setTimeout(() => setCelebration(false), 2500)
-    }
-// Event tetikle
-const rateAfter = dailyScore >= 95 ? 'high_performance' : 'task_completed'
-await fetch('/api/events', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    student_id: profile.id,
-    event_type: rateAfter,
-    event_data: {
-      student_name: profile.full_name,
-      message: rateAfter === 'high_performance'
-        ? profile.full_name + ' bugün ' + dailyScore + ' puan aldı! Harika performans.'
-        : profile.full_name + ' görevini tamamladı: ' + (task.subjects?.name ?? 'Görev'),
-    }
-  })
-})
+    if (remaining === 0) { setCelebrationMsg('Tüm görevleri tamamladın! 🎉'); setCelebration(true); setTimeout(() => setCelebration(false), 4000) }
+    else if (score >= 95) { setCelebrationMsg('Mükemmel! ' + score + ' puan! ⭐'); setCelebration(true); setTimeout(() => setCelebration(false), 2500) }
     await load()
   }
 
@@ -115,6 +96,7 @@ await fetch('/api/events', {
   const dailyProgress = totalTasks > 0 ? Math.round(completedTasks / totalTasks * 100) : 0
   const weakTopics = topicPerf.filter(t => t.accuracy_rate < 50)
   const strongTopics = topicPerf.filter(t => t.accuracy_rate >= 70)
+  const midTopics = topicPerf.filter(t => t.accuracy_rate >= 50 && t.accuracy_rate < 70)
   const dailyScore = streak?.daily_score ?? 0
   const DAYS = ['', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz']
 
@@ -148,17 +130,15 @@ await fetch('/api/events', {
   return (
     <div style={{ display: 'flex', height: '100vh', background: '#F0F4F9', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
 
-      {/* Kutlama Overlay */}
       {celebration && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, pointerEvents: 'none' }}>
-          <div style={{ background: '#1B3A6B', borderRadius: '20px', padding: '28px 40px', textAlign: 'center', boxShadow: '0 20px 60px rgba(27,58,107,0.4)', animation: 'pulse 0.5s ease' }}>
+          <div style={{ background: '#1B3A6B', borderRadius: '20px', padding: '28px 40px', textAlign: 'center', boxShadow: '0 20px 60px rgba(27,58,107,0.4)' }}>
             <div style={{ fontSize: '52px', marginBottom: '10px' }}>🎉</div>
             <div style={{ fontSize: '22px', fontWeight: 800, color: '#fff' }}>{celebrationMsg}</div>
           </div>
         </div>
       )}
 
-      {/* Sidebar */}
       <aside style={{ width: '200px', background: '#fff', borderRight: '1px solid #D5DFF0', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
         <div style={{ padding: '16px', borderBottom: '1px solid #D5DFF0', background: '#1B3A6B' }}>
           <div style={{ fontSize: '13px', fontWeight: 800, color: '#fff' }}>DershaneOPS</div>
@@ -184,7 +164,6 @@ await fetch('/api/events', {
           </div>
         )}
 
-        {/* Günlük Skor */}
         {streak && (
           <div style={{ padding: '12px 16px', borderBottom: '1px solid #D5DFF0' }}>
             <div style={{ fontSize: '10px', color: '#7A8FA8', fontWeight: 600, marginBottom: '6px' }}>GÜNLÜK SKOR</div>
@@ -210,21 +189,15 @@ await fetch('/api/events', {
         </div>
       </aside>
 
-      {/* Main */}
       <main style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
 
         {/* BUGÜN */}
         {activeTab === 'today' && (
           <div style={{ maxWidth: '700px' }}>
-            {/* Karşılama */}
             <div style={{ background: '#1B3A6B', borderRadius: '16px', padding: '20px 24px', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
-                <div style={{ fontSize: '20px', fontWeight: 800, color: '#fff', marginBottom: '4px' }}>
-                  Merhaba, {profile?.full_name?.split(' ')[0]}! 👋
-                </div>
-                <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)' }}>
-                  {new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })}
-                </div>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: '#fff', marginBottom: '4px' }}>Merhaba, {profile?.full_name?.split(' ')[0]}! 👋</div>
+                <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)' }}>{new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
               </div>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '36px', fontWeight: 800, color: '#fff' }}>{dailyProgress}%</div>
@@ -232,7 +205,6 @@ await fetch('/api/events', {
               </div>
             </div>
 
-            {/* Streak & Rozet Bar */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '10px', marginBottom: '16px' }}>
               {[
                 { label: 'Seri', value: (streak?.current_streak ?? 0) + ' gün', icon: '🔥', color: '#B45309', bg: '#FDF4E7' },
@@ -247,7 +219,6 @@ await fetch('/api/events', {
               ))}
             </div>
 
-            {/* Feedback mesajı */}
             {streak && (
               <div style={{ background: fb.bg, borderRadius: '12px', padding: '14px 18px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid rgba(0,0,0,0.05)' }}>
                 <span style={{ fontSize: '28px' }}>{fb.emoji}</span>
@@ -258,7 +229,6 @@ await fetch('/api/events', {
               </div>
             )}
 
-            {/* Günlük Görevler */}
             <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid #D5DFF0', overflow: 'hidden', marginBottom: '16px' }}>
               <div style={{ padding: '16px 20px', borderBottom: '1px solid #F0F4F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ fontSize: '15px', fontWeight: 700, color: '#1B3A6B' }}>📋 Bugünün Görevleri</div>
@@ -266,7 +236,6 @@ await fetch('/api/events', {
                   {completedTasks}/{totalTasks}
                 </span>
               </div>
-
               {dailyTasks.length === 0 ? (
                 <div style={{ padding: '40px', textAlign: 'center' }}>
                   <div style={{ fontSize: '36px', marginBottom: '12px' }}>🎉</div>
@@ -277,19 +246,14 @@ await fetch('/api/events', {
                 const isDone = task.status === 'completed'
                 return (
                   <div key={task.id} style={{ padding: '16px 20px', borderBottom: i < dailyTasks.length - 1 ? '1px solid #F0F4F9' : 'none', display: 'flex', alignItems: 'center', gap: '14px', background: isDone ? '#F8FFF8' : '#fff', opacity: isDone ? 0.7 : 1 }}>
-                    <button
-                      onClick={() => !isDone && completeTask(task.id)}
-                      style={{ width: '44px', height: '44px', borderRadius: '50%', background: isDone ? '#2E7D52' : '#EEF3FB', border: isDone ? 'none' : '2px solid #D5DFF0', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: isDone ? 'default' : 'pointer', flexShrink: 0, fontSize: '20px', transition: 'all 0.2s' }}
-                    >
+                    <button onClick={() => !isDone && completeTask(task.id)} style={{ width: '44px', height: '44px', borderRadius: '50%', background: isDone ? '#2E7D52' : '#EEF3FB', border: isDone ? 'none' : '2px solid #D5DFF0', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: isDone ? 'default' : 'pointer', flexShrink: 0, fontSize: '20px', transition: 'all 0.2s' }}>
                       {isDone ? '✓' : task.subjects?.name?.[0] ?? '📖'}
                     </button>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: '14px', fontWeight: 700, color: isDone ? '#7A8FA8' : '#1B3A6B', textDecoration: isDone ? 'line-through' : 'none', marginBottom: '3px' }}>
                         {task.subjects?.name ?? 'Genel'}{task.topics?.name ? ' — ' + task.topics.name : ''}
                       </div>
-                      <div style={{ fontSize: '12px', color: '#7A8FA8' }}>
-                        {task.description ?? task.question_count + ' soru'} • {task.target_duration_minutes} dk
-                      </div>
+                      <div style={{ fontSize: '12px', color: '#7A8FA8' }}>{task.description ?? task.question_count + ' soru'} • {task.target_duration_minutes} dk</div>
                     </div>
                     {isDone ? (
                       <div style={{ textAlign: 'center', flexShrink: 0 }}>
@@ -297,8 +261,7 @@ await fetch('/api/events', {
                         <div style={{ fontSize: '10px', color: '#7A8FA8' }}>puan</div>
                       </div>
                     ) : (
-                      <div style={{ padding: '8px 16px', borderRadius: '20px', background: '#1B3A6B', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
-                        onClick={() => completeTask(task.id)}>
+                      <div onClick={() => completeTask(task.id)} style={{ padding: '8px 16px', borderRadius: '20px', background: '#1B3A6B', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
                         Yaptım!
                       </div>
                     )}
@@ -307,9 +270,8 @@ await fetch('/api/events', {
               })}
             </div>
 
-            {/* Bekleyen Ödevler */}
             {pendingHw > 0 && (
-              <div style={{ background: '#FDF4E7', borderRadius: '12px', padding: '14px 18px', border: '1px solid #FED7AA', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => setActiveTab('homework')}>
+              <div onClick={() => setActiveTab('homework')} style={{ background: '#FDF4E7', borderRadius: '12px', padding: '14px 18px', border: '1px solid #FED7AA', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', marginBottom: '14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <span style={{ fontSize: '22px' }}>📝</span>
                   <div>
@@ -321,9 +283,8 @@ await fetch('/api/events', {
               </div>
             )}
 
-            {/* Rozetler */}
             {badges.length > 0 && (
-              <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid #D5DFF0', padding: '16px 20px', marginTop: '14px' }}>
+              <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid #D5DFF0', padding: '16px 20px' }}>
                 <div style={{ fontSize: '14px', fontWeight: 700, color: '#1B3A6B', marginBottom: '12px' }}>🏅 Rozetlerim</div>
                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                   {badges.map(b => (
@@ -467,92 +428,6 @@ await fetch('/api/events', {
 
         {/* HEDEFLER */}
         {activeTab === 'goals' && (
-            {activeTab === 'swot' && (
-                <div style={{ maxWidth: '700px' }}>
-                  <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', marginBottom: '20px' }}>Akademik SWOT Analizim 🔍</h1>
-                  {topicPerf.length === 0 ? (
-                    <div style={{ background: '#FDF4E7', border: '1px solid #FED7AA', borderRadius: '14px', padding: '40px', textAlign: 'center' }}>
-                      <div style={{ fontSize: '36px', marginBottom: '12px' }}>📊</div>
-                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#B45309' }}>Henüz analiz için yeterli veri yok</div>
-                      <div style={{ fontSize: '12px', color: '#7A8FA8', marginTop: '6px' }}>Ödevlerini tamamla ve öğretmenin soru girişi yaptıkça analiz oluşacak</div>
-                    </div>
-                  ) : (
-                    <div>
-                      {/* Metrikler */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '10px', marginBottom: '16px' }}>
-                        {[
-                          { label: 'Genel Başarı', value: '%' + overallRate, color: overallRate >= 70 ? '#2E7D52' : overallRate >= 50 ? '#B45309' : '#C0392B', bg: overallRate >= 70 ? '#EAF4EE' : overallRate >= 50 ? '#FDF4E7' : '#FEF2F2' },
-                          { label: 'Güçlü Konu', value: strongTopics.length, color: '#2E7D52', bg: '#EAF4EE' },
-                          { label: 'Gelişim Alanı', value: weakTopics.length, color: '#C0392B', bg: '#FEF2F2' },
-                        ].map(m => (
-                          <div key={m.label} style={{ background: m.bg, borderRadius: '12px', padding: '14px', textAlign: 'center' }}>
-                            <div style={{ fontSize: '26px', fontWeight: 800, color: m.color }}>{m.value}</div>
-                            <div style={{ fontSize: '11px', color: '#7A8FA8', marginTop: '4px' }}>{m.label}</div>
-                          </div>
-                        ))}
-                      </div>
-              
-                      {/* SWOT Kartları */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                        <div style={{ background: '#EAF4EE', border: '1px solid #D1FAE5', borderRadius: '14px', padding: '16px' }}>
-                          <div style={{ fontSize: '13px', fontWeight: 800, color: '#2E7D52', marginBottom: '10px' }}>💪 Güçlü Yönlerim</div>
-                          {strongTopics.length === 0 ? (
-                            <div style={{ fontSize: '12px', color: '#7A8FA8' }}>Henüz güçlü konu belirlenmedi</div>
-                          ) : strongTopics.slice(0, 4).map(t => (
-                            <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid rgba(0,0,0,0.05)', fontSize: '12.5px', color: '#374151' }}>
-                              <span>{t.subjects?.name} — {t.topics?.name ?? 'Genel'}</span>
-                              <strong style={{ color: '#2E7D52' }}>%{Math.round(t.accuracy_rate)}</strong>
-                            </div>
-                          ))}
-                        </div>
-              
-                        <div style={{ background: '#FEF2F2', border: '1px solid #FEE2E2', borderRadius: '14px', padding: '16px' }}>
-                          <div style={{ fontSize: '13px', fontWeight: 800, color: '#C0392B', marginBottom: '10px' }}>📈 Gelişim Alanlarım</div>
-                          {weakTopics.length === 0 ? (
-                            <div style={{ fontSize: '12px', color: '#2E7D52', fontWeight: 600 }}>Harika! Kritik zayıflık yok.</div>
-                          ) : weakTopics.slice(0, 4).map(t => (
-                            <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid rgba(0,0,0,0.05)', fontSize: '12.5px', color: '#374151' }}>
-                              <span>{t.subjects?.name} — {t.topics?.name ?? 'Genel'}</span>
-                              <strong style={{ color: '#C0392B' }}>%{Math.round(t.accuracy_rate)}</strong>
-                            </div>
-                          ))}
-                        </div>
-              
-                        <div style={{ background: '#FDF4E7', border: '1px solid #FEF3C7', borderRadius: '14px', padding: '16px' }}>
-                          <div style={{ fontSize: '13px', fontWeight: 800, color: '#B45309', marginBottom: '10px' }}>🎯 Fırsatlarım</div>
-                          {topicPerf.filter(t => t.accuracy_rate >= 50 && t.accuracy_rate < 70).length === 0 ? (
-                            <div style={{ fontSize: '12px', color: '#7A8FA8' }}>Orta seviye konu yok</div>
-                          ) : topicPerf.filter(t => t.accuracy_rate >= 50 && t.accuracy_rate < 70).slice(0, 4).map(t => (
-                            <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid rgba(0,0,0,0.05)', fontSize: '12.5px', color: '#374151' }}>
-                              <span>{t.subjects?.name} — {t.topics?.name ?? 'Genel'}</span>
-                              <strong style={{ color: '#B45309' }}>%{Math.round(t.accuracy_rate)}</strong>
-                            </div>
-                          ))}
-                          <div style={{ fontSize: '11px', color: '#B45309', marginTop: '8px', fontStyle: 'italic' }}>
-                            Bu konulara odaklan — hızlı gelişim sağlarsın!
-                          </div>
-                        </div>
-              
-                        <div style={{ background: '#EEF3FB', border: '1px solid #BFDBFE', borderRadius: '14px', padding: '16px' }}>
-                          <div style={{ fontSize: '13px', fontWeight: 800, color: '#1B3A6B', marginBottom: '10px' }}>⚠️ Dikkat Etmem Gerekenler</div>
-                          {riskScore >= 45 ? (
-                            <div style={{ fontSize: '12.5px', color: '#1B3A6B', lineHeight: 1.6 }}>
-                              <div style={{ marginBottom: '6px' }}>Risk skorum: <strong style={{ color: riskScore >= 70 ? '#C0392B' : '#B45309' }}>{Math.round(riskScore)}/100</strong></div>
-                              {weakTopics.length > 0 && <div>• {weakTopics[0].subjects?.name} — {weakTopics[0].topics?.name ?? 'Genel'} konusuna odaklan</div>}
-                              <div>• Düzenli çalışma alışkanlığı kazan</div>
-                              <div>• Öğretmeninden destek iste</div>
-                            </div>
-                          ) : (
-                            <div style={{ fontSize: '12.5px', color: '#2E7D52', fontWeight: 600 }}>
-                              Harika gidiyorsun! Risk seviyesi düşük. Böyle devam et!
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
           <div style={{ maxWidth: '700px' }}>
             <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', marginBottom: '20px' }}>Hedeflerim 🎯</h1>
             {goals.length === 0 ? (
@@ -587,6 +462,89 @@ await fetch('/api/events', {
             })}
           </div>
         )}
+
+        {/* SWOT */}
+        {activeTab === 'swot' && (
+          <div style={{ maxWidth: '700px' }}>
+            <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', marginBottom: '20px' }}>Akademik SWOT Analizim 🔍</h1>
+            {topicPerf.length === 0 ? (
+              <div style={{ background: '#FDF4E7', border: '1px solid #FED7AA', borderRadius: '14px', padding: '40px', textAlign: 'center' }}>
+                <div style={{ fontSize: '36px', marginBottom: '12px' }}>📊</div>
+                <div style={{ fontSize: '14px', fontWeight: 700, color: '#B45309' }}>Henüz analiz için yeterli veri yok</div>
+                <div style={{ fontSize: '12px', color: '#7A8FA8', marginTop: '6px' }}>Ödevlerini tamamla ve öğretmenin soru girişi yaptıkça analiz oluşacak</div>
+              </div>
+            ) : (
+              <div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '10px', marginBottom: '16px' }}>
+                  {[
+                    { label: 'Genel Başarı', value: '%' + overallRate, color: overallRate >= 70 ? '#2E7D52' : overallRate >= 50 ? '#B45309' : '#C0392B', bg: overallRate >= 70 ? '#EAF4EE' : overallRate >= 50 ? '#FDF4E7' : '#FEF2F2' },
+                    { label: 'Güçlü Konu', value: strongTopics.length, color: '#2E7D52', bg: '#EAF4EE' },
+                    { label: 'Gelişim Alanı', value: weakTopics.length, color: '#C0392B', bg: '#FEF2F2' },
+                  ].map(m => (
+                    <div key={m.label} style={{ background: m.bg, borderRadius: '12px', padding: '14px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '26px', fontWeight: 800, color: m.color }}>{m.value}</div>
+                      <div style={{ fontSize: '11px', color: '#7A8FA8', marginTop: '4px' }}>{m.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div style={{ background: '#EAF4EE', border: '1px solid #D1FAE5', borderRadius: '14px', padding: '16px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 800, color: '#2E7D52', marginBottom: '10px' }}>💪 Güçlü Yönlerim</div>
+                    {strongTopics.length === 0 ? (
+                      <div style={{ fontSize: '12px', color: '#7A8FA8' }}>Henüz güçlü konu belirlenmedi</div>
+                    ) : strongTopics.slice(0, 4).map(t => (
+                      <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid rgba(0,0,0,0.05)', fontSize: '12.5px', color: '#374151' }}>
+                        <span>{t.subjects?.name} — {t.topics?.name ?? 'Genel'}</span>
+                        <strong style={{ color: '#2E7D52' }}>%{Math.round(t.accuracy_rate)}</strong>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ background: '#FEF2F2', border: '1px solid #FEE2E2', borderRadius: '14px', padding: '16px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 800, color: '#C0392B', marginBottom: '10px' }}>📈 Gelişim Alanlarım</div>
+                    {weakTopics.length === 0 ? (
+                      <div style={{ fontSize: '12px', color: '#2E7D52', fontWeight: 600 }}>Harika! Kritik zayıflık yok.</div>
+                    ) : weakTopics.slice(0, 4).map(t => (
+                      <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid rgba(0,0,0,0.05)', fontSize: '12.5px', color: '#374151' }}>
+                        <span>{t.subjects?.name} — {t.topics?.name ?? 'Genel'}</span>
+                        <strong style={{ color: '#C0392B' }}>%{Math.round(t.accuracy_rate)}</strong>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ background: '#FDF4E7', border: '1px solid #FEF3C7', borderRadius: '14px', padding: '16px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 800, color: '#B45309', marginBottom: '10px' }}>🎯 Fırsatlarım</div>
+                    {midTopics.length === 0 ? (
+                      <div style={{ fontSize: '12px', color: '#7A8FA8' }}>Orta seviye konu yok</div>
+                    ) : midTopics.slice(0, 4).map(t => (
+                      <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid rgba(0,0,0,0.05)', fontSize: '12.5px', color: '#374151' }}>
+                        <span>{t.subjects?.name} — {t.topics?.name ?? 'Genel'}</span>
+                        <strong style={{ color: '#B45309' }}>%{Math.round(t.accuracy_rate)}</strong>
+                      </div>
+                    ))}
+                    <div style={{ fontSize: '11px', color: '#B45309', marginTop: '8px', fontStyle: 'italic' }}>Bu konulara odaklan — hızlı gelişim!</div>
+                  </div>
+
+                  <div style={{ background: '#EEF3FB', border: '1px solid #BFDBFE', borderRadius: '14px', padding: '16px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 800, color: '#1B3A6B', marginBottom: '10px' }}>⚠️ Dikkat Etmem Gerekenler</div>
+                    {riskScore >= 45 ? (
+                      <div style={{ fontSize: '12.5px', color: '#1B3A6B', lineHeight: 1.6 }}>
+                        <div style={{ marginBottom: '6px' }}>Risk skorum: <strong style={{ color: riskScore >= 70 ? '#C0392B' : '#B45309' }}>{Math.round(riskScore)}/100</strong></div>
+                        {weakTopics.length > 0 && <div>• {weakTopics[0].subjects?.name} — {weakTopics[0].topics?.name ?? 'Genel'} konusuna odaklan</div>}
+                        <div>• Düzenli çalışma alışkanlığı kazan</div>
+                        <div>• Öğretmeninden destek iste</div>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '12.5px', color: '#2E7D52', fontWeight: 600 }}>Harika gidiyorsun! Risk seviyesi düşük. Böyle devam et!</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
       </main>
     </div>
   )
