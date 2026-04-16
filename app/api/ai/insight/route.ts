@@ -26,8 +26,8 @@ Lutfen asagidaki formatta Turkce analiz yaz:
 Profesyonel, net ve motive edici bir dil kullan.`
 
     const msg = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 600,
+      model: 'claude-sonnet-4-5',
+      max_tokens: 1500,
       messages: [{ role: 'user', content: prompt }]
     })
 

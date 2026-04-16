@@ -38,8 +38,8 @@ VELI ICIN NOTLAR
 Profesyonel, sicak, umut verici ve somut bir dil kullan. Akademik jargondan kacin. Maksimum 500 kelime.`
 
     const msg = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1000,
+      model: 'claude-sonnet-4-5',
+      max_tokens: 1500,
       messages: [{ role: 'user', content: prompt }]
     })
 

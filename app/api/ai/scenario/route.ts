@@ -37,7 +37,7 @@ TAVSİYE
 (Bu senaryo uygulanmalı mı? Neden?)
 
 Gerçekçi, somut rakamlara dayalı, motive edici bir dil kullan. Maksimum 400 kelime.`
-    const msg = await client.messages.create({ model: 'claude-sonnet-4-6', max_tokens: 800, messages: [{ role: 'user', content: prompt }] })
+    const msg = await client.messages.create({ model: 'claude-sonnet-4-5', max_tokens: 1500, messages: [{ role: 'user', content: prompt }] })
     const result = msg.content[0].type === 'text' ? msg.content[0].text : ''
     return NextResponse.json({ ok: true, result })
   } catch (err: any) {

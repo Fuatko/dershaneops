@@ -46,7 +46,7 @@ HEDEF VE BEKLENTI
 Veri odakli, profesyonel ve motive edici bir dil kullan. Maksimum 600 kelime.`
 
     const msg = await client.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-4-5',
       max_tokens: 1200,
       messages: [{ role: 'user', content: prompt }]
     })

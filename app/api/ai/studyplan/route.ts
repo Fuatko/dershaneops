@@ -36,7 +36,7 @@ SADECE asagidaki JSON formatinda cevap ver, baska hicbir sey yazma:
 task_type degerlerinden birini kullan: weak_area, review, new_topic, exam_practice`
 
     const msg = await client.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-4-5',
       max_tokens: 2000,
       messages: [{ role: 'user', content: prompt }]
     })

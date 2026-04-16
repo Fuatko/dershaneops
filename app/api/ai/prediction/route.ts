@@ -32,7 +32,7 @@ TAVSİYE EDİLEN AKSIYONLAR
 (3-4 somut adım)
 
 Net, gerçekçi ve motive edici bir dil kullan. Maksimum 350 kelime.`
-    const msg = await client.messages.create({ model: 'claude-sonnet-4-6', max_tokens: 700, messages: [{ role: 'user', content: prompt }] })
+    const msg = await client.messages.create({ model: 'claude-sonnet-4-5', max_tokens: 1500, messages: [{ role: 'user', content: prompt }] })
     const prediction = msg.content[0].type === 'text' ? msg.content[0].text : ''
     return NextResponse.json({ ok: true, prediction })
   } catch (err: any) {
