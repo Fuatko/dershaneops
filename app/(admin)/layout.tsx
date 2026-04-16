@@ -36,6 +36,7 @@ const navGroups = [
     { href: '/exams', label: 'Deneme Sınavları' },
     { href: '/exam-analytics', label: 'Sınav Analizi' },
     { href: '/institution', label: 'Kurum Zekası' },
+    { href: '/prediction', label: 'Tahmin Motoru' },
     { href: '/coordinator', label: 'Akademik Koordinatör' },
     { href: '/reports', label: 'Raporlar' },
     { href: '/notifications', label: 'Bildirimler' },
