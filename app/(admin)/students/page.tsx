@@ -17,6 +17,7 @@ export default function StudentsPage() {
       .from('profiles')
       .select('*, classrooms(name)')
       .eq('role', 'student')
+      .eq('tenant_id', '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f')
       .order('grade_level', { ascending: true })
     setStudents(data ?? [])
     setLoading(false)
@@ -77,6 +78,12 @@ export default function StudentsPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#E2EAF8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, color: '#1B3A6B', flexShrink: 0 }}>
                       {s.full_name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                      <span style={{ fontSize: '13px', fontWeight: 600, color: '#1B3A6B' }}>{s.full_name}</span>
+{s.grade_level && (
+  <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '5px', marginLeft: '6px', background: s.grade_level <= 4 ? '#EAF4EE' : s.grade_level <= 8 ? '#EEF3FB' : '#F0ECFB', color: s.grade_level <= 4 ? '#2E7D52' : s.grade_level <= 8 ? '#1B3A6B' : '#6B4FC8' }}>
+    {s.grade_level}. Sınıf {(s.classrooms as any)?.name ? '· ' + (s.classrooms as any).name : ''}
+  </span>
+)}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
   <span style={{ fontSize: '13px', fontWeight: 600, color: '#1B3A6B' }}>{s.full_name}</span>
