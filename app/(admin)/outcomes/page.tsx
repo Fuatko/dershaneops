@@ -12,12 +12,14 @@ export default function OutcomesPage() {
   const [students, setStudents] = useState<any[]>([])
   const [selectedSubject, setSelectedSubject] = useState('')
   const [selectedClassroom, setSelectedClassroom] = useState('')
+  const [selectedStudent, setSelectedStudent] = useState('')
   const [activeTab, setActiveTab] = useState('outcomes')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
   const [classroomAnalysis, setClassroomAnalysis] = useState<any[]>([])
   const [analysisLoading, setAnalysisLoading] = useState(false)
+  const [newClass, setNewClass] = useState({ grade: 9, branch: 'A', year: '2025-2026' })
   const [form, setForm] = useState({
     subject_id: '', topic_id: '', code: '', description: '',
     grade_level: 10, difficulty_level: 'medium', order_no: 0
@@ -80,47 +82,15 @@ export default function OutcomesPage() {
     await loadOutcomes(selectedSubject)
   }
 
-  async function analyzeClassroom() {
-    if (!selectedClassroom) { alert('Sınıf seçin!'); return }
-    setAnalysisLoading(true)
-    setClassroomAnalysis([])
-
-    const { data: csData } = await supabase
-      .from('classroom_students')
-      .select('student_id')
-      .eq('classroom_id', selectedClassroom)
-
-    if (!csData || csData.length === 0) {
-      alert('Bu sınıfta öğrenci yok!')
-      setAnalysisLoading(false)
-      return
-    }
-
-    const studentIds = csData.map(cs => cs.student_id)
-    const { data: tp } = await supabase
-      .from('student_topic_performance')
-      .select('*, subjects(name), topics(name), profiles!student_topic_performance_student_id_fkey(full_name)')
-      .in('student_id', studentIds)
-
-    const subjectMap: any = {}
-    for (const t of tp ?? []) {
-      const key = t.subject_id + '_' + (t.topic_id ?? 'general')
-      if (!subjectMap[key]) subjectMap[key] = { subject: t.subjects?.name, topic: t.topics?.name ?? 'Genel', rates: [], students: [] }
-      subjectMap[key].rates.push(t.accuracy_rate)
-      subjectMap[key].students.push({ name: t.profiles?.full_name, rate: t.accuracy_rate })
-    }
-
-    const analysis = Object.values(subjectMap).map((s: any) => ({
-      subject: s.subject,
-      topic: s.topic,
-      avg: Math.round(s.rates.reduce((a: number, b: number) => a + b, 0) / s.rates.length),
-      student_count: s.rates.length,
-      weak_students: s.students.filter((st: any) => st.rate < 50).length,
-      students: s.students.sort((a: any, b: any) => a.rate - b.rate),
-    })).sort((a: any, b: any) => a.avg - b.avg)
-
-    setClassroomAnalysis(analysis)
-    setAnalysisLoading(false)
+  async function addClass() {
+    const name = newClass.grade + '-' + newClass.branch
+    const { error } = await supabase.from('classrooms').insert({
+      tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
+      name, grade_level: newClass.grade, branch: newClass.branch, academic_year: newClass.year
+    })
+    if (error) { alert('Hata: ' + error.message); return }
+    await load()
+    alert(name + ' sınıfı eklendi!')
   }
 
   async function assignStudentToClass() {
@@ -130,16 +100,58 @@ export default function OutcomesPage() {
       student_id: selectedStudent,
     })
     if (error) { alert('Hata: ' + error.message); return }
-    alert('Öğrenci sınıfa eklendi!')
     setSelectedStudent('')
+    alert('Öğrenci sınıfa eklendi!')
   }
 
-  const [selectedStudent, setSelectedStudent] = useState('')
+  async function analyzeClassroom() {
+    if (!selectedClassroom) { alert('Sınıf seçin!'); return }
+    setAnalysisLoading(true)
+    setClassroomAnalysis([])
+    const { data: csData } = await supabase.from('classroom_students').select('student_id').eq('classroom_id', selectedClassroom)
+    if (!csData || csData.length === 0) { alert('Bu sınıfta öğrenci yok!'); setAnalysisLoading(false); return }
+    const studentIds = csData.map(cs => cs.student_id)
+    const { data: tp } = await supabase.from('student_topic_performance')
+      .select('*, subjects(name), topics(name), profiles!student_topic_performance_student_id_fkey(full_name)')
+      .in('student_id', studentIds)
+    const subjectMap: any = {}
+    for (const t of tp ?? []) {
+      const key = t.subject_id + '_' + (t.topic_id ?? 'general')
+      if (!subjectMap[key]) subjectMap[key] = { subject: t.subjects?.name, topic: t.topics?.name ?? 'Genel', rates: [], students: [] }
+      subjectMap[key].rates.push(t.accuracy_rate)
+      subjectMap[key].students.push({ name: t.profiles?.full_name, rate: t.accuracy_rate })
+    }
+    const analysis = Object.values(subjectMap).map((s: any) => ({
+      subject: s.subject, topic: s.topic,
+      avg: Math.round(s.rates.reduce((a: number, b: number) => a + b, 0) / s.rates.length),
+      student_count: s.rates.length,
+      weak_students: s.students.filter((st: any) => st.rate < 50).length,
+      students: s.students.sort((a: any, b: any) => a.rate - b.rate),
+    })).sort((a: any, b: any) => a.avg - b.avg)
+    setClassroomAnalysis(analysis)
+    setAnalysisLoading(false)
+  }
+
+  function getSchoolLevel(grade: number) {
+    if (grade <= 4) return 'İlkokul'
+    if (grade <= 8) return 'Ortaokul'
+    return 'Lise'
+  }
+
+  function getLevelColor(level: string) {
+    if (level === 'İlkokul') return { color: '#2E7D52', bg: '#EAF4EE' }
+    if (level === 'Ortaokul') return { color: '#1B3A6B', bg: '#EEF3FB' }
+    return { color: '#6B4FC8', bg: '#F0ECFB' }
+  }
 
   const inp: React.CSSProperties = { width: '100%', padding: '8px 10px', borderRadius: '7px', border: '1px solid #D5DFF0', fontSize: '12.5px', color: '#1B3A6B', outline: 'none', background: '#fff', boxSizing: 'border-box' }
   const lbl: React.CSSProperties = { display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#4A6080', marginBottom: '5px' }
 
   if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#7A8FA8' }}>Yükleniyor...</div>
+
+  const ilkokul = classrooms.filter(c => c.grade_level <= 4)
+  const ortaokul = classrooms.filter(c => c.grade_level >= 5 && c.grade_level <= 8)
+  const lise = classrooms.filter(c => c.grade_level >= 9)
 
   return (
     <div style={{ padding: '28px', maxWidth: '1200px' }}>
@@ -160,7 +172,6 @@ export default function OutcomesPage() {
         ))}
       </div>
 
-      {/* KAZANIM YÖNETİMİ */}
       {activeTab === 'outcomes' && (
         <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: '20px' }}>
           <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '20px', alignSelf: 'flex-start' }}>
@@ -188,7 +199,15 @@ export default function OutcomesPage() {
                 <div>
                   <label style={lbl}>Sınıf Seviyesi</label>
                   <select value={form.grade_level} onChange={e => setForm(p => ({ ...p, grade_level: parseInt(e.target.value) }))} style={inp}>
-                    {[9,10,11,12].map(g => <option key={g} value={g}>{g}. Sınıf</option>)}
+                    <optgroup label="İlkokul">
+                      {[1,2,3,4].map(g => <option key={g} value={g}>{g}. Sınıf</option>)}
+                    </optgroup>
+                    <optgroup label="Ortaokul">
+                      {[5,6,7,8].map(g => <option key={g} value={g}>{g}. Sınıf</option>)}
+                    </optgroup>
+                    <optgroup label="Lise">
+                      {[9,10,11,12].map(g => <option key={g} value={g}>{g}. Sınıf</option>)}
+                    </optgroup>
                   </select>
                 </div>
               </div>
@@ -225,7 +244,6 @@ export default function OutcomesPage() {
                 {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
-
             {outcomes.length === 0 ? (
               <div style={{ background: '#F8FAFF', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '40px', textAlign: 'center' }}>
                 <div style={{ fontSize: '36px', marginBottom: '12px' }}>📚</div>
@@ -247,7 +265,7 @@ export default function OutcomesPage() {
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: '13px', fontWeight: 600, color: '#1B3A6B', marginBottom: '3px' }}>{o.description}</div>
                       <div style={{ fontSize: '11.5px', color: '#7A8FA8' }}>
-                        {o.subjects?.name}{o.topics?.name ? ' → ' + o.topics.name : ''} • {o.grade_level}. Sınıf
+                        {o.subjects?.name}{o.topics?.name ? ' → ' + o.topics.name : ''} • {o.grade_level}. Sınıf • {getSchoolLevel(o.grade_level)}
                       </div>
                     </div>
                     <button onClick={() => deleteOutcome(o.id)} style={{ padding: '5px 10px', borderRadius: '6px', border: '1px solid #FECACA', background: '#FEF2F2', color: '#C0392B', fontSize: '11px', cursor: 'pointer', flexShrink: 0 }}>
@@ -261,118 +279,47 @@ export default function OutcomesPage() {
         </div>
       )}
 
-      {/* SINIF & ŞUBE */}
       {activeTab === 'classrooms' && (
-  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-    <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', overflow: 'hidden' }}>
-      <div style={{ padding: '14px 18px', borderBottom: '1px solid #D5DFF0', fontSize: '13px', fontWeight: 700, color: '#1B3A6B' }}>
-        Sınıflar ({classrooms.length})
-      </div>
-      {['İlkokul', 'Ortaokul', 'Lise'].map(level => {
-        const levelClassrooms = classrooms.filter((c: any) => c.school_level === level)
-        if (levelClassrooms.length === 0) return null
-        const levelColor = level === 'İlkokul' ? '#2E7D52' : level === 'Ortaokul' ? '#1B3A6B' : '#6B4FC8'
-        const levelBg = level === 'İlkokul' ? '#EAF4EE' : level === 'Ortaokul' ? '#EEF3FB' : '#F0ECFB'
-        return (
-          <div key={level}>
-            <div style={{ padding: '8px 18px', background: levelBg, borderBottom: '1px solid #F0F4F9', fontSize: '11px', fontWeight: 700, color: levelColor, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-              {level} ({levelClassrooms.length} şube)
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', overflow: 'hidden' }}>
+            <div style={{ padding: '14px 18px', borderBottom: '1px solid #D5DFF0', fontSize: '13px', fontWeight: 700, color: '#1B3A6B' }}>
+              Sınıflar ({classrooms.length})
             </div>
-            {levelClassrooms.map((c: any, i: number) => (
-              <div key={c.id} onClick={() => setSelectedClassroom(c.id)} style={{ padding: '12px 18px', borderBottom: '1px solid #F0F4F9', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', background: selectedClassroom === c.id ? '#F5F8FF' : '#fff', borderLeft: selectedClassroom === c.id ? '3px solid #1B3A6B' : '3px solid transparent' }}>
-                <div style={{ width: '38px', height: '38px', borderRadius: '9px', background: selectedClassroom === c.id ? levelColor : levelBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 800, color: selectedClassroom === c.id ? '#fff' : levelColor, flexShrink: 0 }}>
-                  {c.name}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B' }}>{c.name} Şubesi</div>
-                  <div style={{ fontSize: '11px', color: '#7A8FA8' }}>{c.grade_level}. Sınıf • {c.academic_year}</div>
-                </div>
-                {selectedClassroom === c.id && (
-                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: levelColor, flexShrink: 0 }} />
-                )}
-              </div>
-            ))}
-          </div>
-        )
-      })}
-    </div>
 
-    <div>
-      {selectedClassroom ? (
-        <div>
-          <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '20px', marginBottom: '14px' }}>
-            <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B', marginBottom: '14px' }}>
-              {classrooms.find(c => c.id === selectedClassroom)?.name} Şubesine Öğrenci Ekle
-            </div>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <select value={selectedStudent} onChange={e => setSelectedStudent(e.target.value)} style={{ ...inp, flex: 1 }}>
-                <option value="">Öğrenci seçin...</option>
-                {students.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
-              </select>
-              <button onClick={assignStudentToClass} style={{ padding: '8px 16px', borderRadius: '8px', background: '#1B3A6B', color: '#fff', fontSize: '12.5px', fontWeight: 600, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                Ekle
-              </button>
-            </div>
-          </div>
-
-          <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '20px' }}>
-            <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B', marginBottom: '10px' }}>Yeni Sınıf Ekle</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '12px' }}>
-              <div>
-                <label style={lbl}>Sınıf No</label>
-                <select style={inp} id="new_grade">
-                  {Array.from({length: 12}, (_, i) => i + 1).map(g => (
-                    <option key={g} value={g}>{g}. Sınıf ({g <= 4 ? 'İlkokul' : g <= 8 ? 'Ortaokul' : 'Lise'})</option>
+            {[
+              { label: 'İlkokul', items: ilkokul },
+              { label: 'Ortaokul', items: ortaokul },
+              { label: 'Lise', items: lise },
+            ].map(group => {
+              if (group.items.length === 0) return null
+              const lc = getLevelColor(group.label)
+              return (
+                <div key={group.label}>
+                  <div style={{ padding: '8px 18px', background: lc.bg, borderBottom: '1px solid #F0F4F9', fontSize: '11px', fontWeight: 700, color: lc.color, letterSpacing: '0.5px' }}>
+                    {group.label} ({group.items.length} şube)
+                  </div>
+                  {group.items.map(c => (
+                    <div key={c.id} onClick={() => setSelectedClassroom(c.id)} style={{ padding: '11px 18px', borderBottom: '1px solid #F0F4F9', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', background: selectedClassroom === c.id ? '#F5F8FF' : '#fff', borderLeft: selectedClassroom === c.id ? '3px solid ' + lc.color : '3px solid transparent' }}>
+                      <div style={{ width: '36px', height: '36px', borderRadius: '9px', background: selectedClassroom === c.id ? lc.color : lc.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 800, color: selectedClassroom === c.id ? '#fff' : lc.color, flexShrink: 0 }}>
+                        {c.name}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B' }}>{c.grade_level}. Sınıf — {c.branch} Şubesi</div>
+                        <div style={{ fontSize: '11px', color: '#7A8FA8' }}>{c.academic_year}</div>
+                      </div>
+                    </div>
                   ))}
-                </select>
-              </div>
-              <div>
-                <label style={lbl}>Şube</label>
-                <select style={inp} id="new_branch">
-                  {['A','B','C','D','E'].map(b => <option key={b} value={b}>{b}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={lbl}>Yıl</label>
-                <select style={inp} id="new_year">
-                  <option value="2025-2026">2025-2026</option>
-                  <option value="2026-2027">2026-2027</option>
-                </select>
-              </div>
-            </div>
-            <button
-              onClick={async () => {
-                const grade = parseInt((document.getElementById('new_grade') as HTMLSelectElement).value)
-                const branch = (document.getElementById('new_branch') as HTMLSelectElement).value
-                const year = (document.getElementById('new_year') as HTMLSelectElement).value
-                const name = grade + '-' + branch
-                const { error } = await supabase.from('classrooms').insert({
-                  tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
-                  name, grade_level: grade, branch, academic_year: year
-                })
-                if (error) { alert('Hata: ' + error.message); return }
-                await load()
-                alert(name + ' sınıfı eklendi!')
-              }}
-              style={{ width: '100%', padding: '10px', borderRadius: '8px', background: '#2E7D52', color: '#fff', fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer' }}
-            >
-              + Sınıf Ekle
-            </button>
+                </div>
+              )
+            })}
           </div>
-        </div>
-      ) : (
-        <div style={{ background: '#F8FAFF', border: '1px solid #D5DFF0', borderRadius: '12px', padding: '60px', textAlign: 'center' }}>
-          <div style={{ fontSize: '36px', marginBottom: '12px' }}>🏫</div>
-          <div style={{ fontSize: '14px', color: '#7A8FA8' }}>Sol panelden sınıf seçin</div>
-        </div>
-      )}
-    </div>
-  </div>
-)}
-          <div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             {selectedClassroom && (
-              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '20px' }}>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B', marginBottom: '16px' }}>Öğrenci Ekle</div>
+              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '18px' }}>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B', marginBottom: '12px' }}>
+                  {classrooms.find(c => c.id === selectedClassroom)?.name} Şubesine Öğrenci Ekle
+                </div>
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <select value={selectedStudent} onChange={e => setSelectedStudent(e.target.value)} style={{ ...inp, flex: 1 }}>
                     <option value="">Öğrenci seçin...</option>
@@ -382,18 +329,49 @@ export default function OutcomesPage() {
                     Ekle
                   </button>
                 </div>
-                <div style={{ marginTop: '16px', background: '#EEF3FB', borderRadius: '8px', padding: '12px', border: '1px solid #BFDBFE' }}>
-                  <div style={{ fontSize: '12px', color: '#1B3A6B' }}>
-                    Sınıfa öğrenci ekledikten sonra <strong>Sınıf Analizi</strong> sekmesinden o sınıfın konu performansını görebilirsiniz.
-                  </div>
-                </div>
               </div>
             )}
+
+            <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '18px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B', marginBottom: '14px' }}>Yeni Sınıf Ekle</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+                <div>
+                  <label style={lbl}>Sınıf Seviyesi</label>
+                  <select value={newClass.grade} onChange={e => setNewClass(p => ({ ...p, grade: parseInt(e.target.value) }))} style={inp}>
+                    <optgroup label="İlkokul">
+                      {[1,2,3,4].map(g => <option key={g} value={g}>{g}. Sınıf</option>)}
+                    </optgroup>
+                    <optgroup label="Ortaokul">
+                      {[5,6,7,8].map(g => <option key={g} value={g}>{g}. Sınıf</option>)}
+                    </optgroup>
+                    <optgroup label="Lise">
+                      {[9,10,11,12].map(g => <option key={g} value={g}>{g}. Sınıf</option>)}
+                    </optgroup>
+                  </select>
+                </div>
+                <div>
+                  <label style={lbl}>Şube</label>
+                  <select value={newClass.branch} onChange={e => setNewClass(p => ({ ...p, branch: e.target.value }))} style={inp}>
+                    {['A','B','C','D','E','F'].map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={lbl}>Yıl</label>
+                  <select value={newClass.year} onChange={e => setNewClass(p => ({ ...p, year: e.target.value }))} style={inp}>
+                    <option value="2024-2025">2024-2025</option>
+                    <option value="2025-2026">2025-2026</option>
+                    <option value="2026-2027">2026-2027</option>
+                  </select>
+                </div>
+              </div>
+              <button onClick={addClass} style={{ width: '100%', padding: '10px', borderRadius: '8px', background: '#2E7D52', color: '#fff', fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer' }}>
+                + {newClass.grade}-{newClass.branch} Sınıfını Ekle
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* SINIF ANALİZİ */}
       {activeTab === 'analysis' && (
         <div>
           <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '18px', marginBottom: '16px' }}>
@@ -402,7 +380,15 @@ export default function OutcomesPage() {
                 <label style={lbl}>Sınıf Seç</label>
                 <select value={selectedClassroom} onChange={e => setSelectedClassroom(e.target.value)} style={inp}>
                   <option value="">Sınıf seçin...</option>
-                  {classrooms.map(c => <option key={c.id} value={c.id}>{c.name} — {c.grade_level}. Sınıf</option>)}
+                  {[
+                    { label: 'İlkokul', items: ilkokul },
+                    { label: 'Ortaokul', items: ortaokul },
+                    { label: 'Lise', items: lise },
+                  ].map(group => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.items.map(c => <option key={c.id} value={c.id}>{c.name} — {c.grade_level}. Sınıf</option>)}
+                    </optgroup>
+                  ))}
                 </select>
               </div>
               <button onClick={analyzeClassroom} disabled={analysisLoading || !selectedClassroom} style={{ padding: '9px 20px', borderRadius: '8px', background: selectedClassroom ? '#1B3A6B' : '#D5DFF0', color: '#fff', fontSize: '13px', fontWeight: 600, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>
@@ -432,7 +418,7 @@ export default function OutcomesPage() {
                 </div>
                 {classroomAnalysis.map((a, i) => (
                   <div key={i} style={{ padding: '12px 18px', borderBottom: i < classroomAnalysis.length - 1 ? '1px solid #F0F4F9' : 'none' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: a.avg < 50 ? '6px' : '0' }}>
                       <div style={{ width: '160px', flexShrink: 0 }}>
                         <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#1B3A6B' }}>{a.topic}</div>
                         <div style={{ fontSize: '11px', color: '#7A8FA8' }}>{a.subject}</div>
@@ -440,9 +426,9 @@ export default function OutcomesPage() {
                       <div style={{ flex: 1, height: '8px', background: '#F0F4F9', borderRadius: '4px', overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: a.avg + '%', background: a.avg >= 70 ? '#2E7D52' : a.avg >= 50 ? '#B45309' : '#C0392B', borderRadius: '4px' }} />
                       </div>
-                      <div style={{ width: '80px', display: 'flex', gap: '8px', flexShrink: 0, fontSize: '12px' }}>
-                        <span style={{ fontWeight: 800, color: a.avg >= 70 ? '#2E7D52' : a.avg >= 50 ? '#B45309' : '#C0392B' }}>%{a.avg}</span>
-                        {a.weak_students > 0 && <span style={{ color: '#C0392B', fontSize: '11px' }}>{a.weak_students} zayıf</span>}
+                      <div style={{ display: 'flex', gap: '8px', flexShrink: 0, alignItems: 'center' }}>
+                        <span style={{ fontSize: '14px', fontWeight: 800, color: a.avg >= 70 ? '#2E7D52' : a.avg >= 50 ? '#B45309' : '#C0392B' }}>%{a.avg}</span>
+                        {a.weak_students > 0 && <span style={{ fontSize: '11px', color: '#C0392B', background: '#FEF2F2', padding: '2px 7px', borderRadius: '8px', fontWeight: 600 }}>{a.weak_students} zayıf</span>}
                       </div>
                     </div>
                     {a.avg < 50 && (
