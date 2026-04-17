@@ -72,7 +72,8 @@ export default function GuidancePage() {
     e.preventDefault()
     if (!selected || !attendanceForm.lesson_id) { alert('Ders seçin!'); return }
     setSavingAttendance(true)
-    await supabase.from('attendance').upsert({
+  
+    const { error } = await supabase.from('attendance').upsert({
       tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
       student_id: selected.id,
       lesson_id: attendanceForm.lesson_id,
@@ -80,8 +81,24 @@ export default function GuidancePage() {
       status: attendanceForm.status,
       notes: attendanceForm.notes || null,
     }, { onConflict: 'student_id,lesson_id' })
-    const { data: att } = await supabase.from('attendance').select('*, lessons(subject, scheduled_at)').eq('student_id', selected.id).order('date', { ascending: false })
-    setAttendance(att ?? [])
+  
+    if (error) { alert('Hata: ' + error.message); setSavingAttendance(false); return }
+  
+    // Yeniden yükle
+    const { data: att } = await supabase
+      .from('attendance')
+      .select('id, date, status, notes, lesson_id')
+      .eq('student_id', selected.id)
+      .order('date', { ascending: false })
+  
+    // Ders bilgilerini ayrı çek
+    const enriched = []
+    for (const a of att ?? []) {
+      const { data: l } = await supabase.from('lessons').select('subject, scheduled_at').eq('id', a.lesson_id).single()
+      enriched.push({ ...a, lessons: l })
+    }
+  
+    setAttendance(enriched)
     setAttendanceForm(p => ({ ...p, lesson_id: '', notes: '' }))
     setSavingAttendance(false)
   }
