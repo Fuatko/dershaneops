@@ -17,7 +17,6 @@ export default function StudentsPage() {
       .from('profiles')
       .select('*, classrooms(name)')
       .eq('role', 'student')
-      .eq('tenant_id', '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f')
       .order('grade_level', { ascending: true })
     setStudents(data ?? [])
     setLoading(false)
