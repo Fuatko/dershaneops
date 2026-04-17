@@ -40,6 +40,7 @@ const navGroups = [
     { href: '/prediction', label: 'Tahmin Motoru' },
     { href: '/scenario', label: 'Senaryo Motoru' },
     { href: '/coordinator', label: 'Akademik Koordinatör' },
+    { href: '/guidance', label: 'Rehberlik' },
     { href: '/reports', label: 'Raporlar ve Export' },
     { href: '/notifications', label: 'Bildirimler' },
     { href: '/superadmin', label: '⚙ Süper Admin' },
