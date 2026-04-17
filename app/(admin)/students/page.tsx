@@ -15,9 +15,9 @@ export default function StudentsPage() {
   async function load() {
     const { data } = await supabase
       .from('profiles')
-      .select('*')
+      .select('*, classrooms(name)')
       .eq('role', 'student')
-      .order('full_name')
+      .order('grade_level', { ascending: true })
     setStudents(data ?? [])
     setLoading(false)
   }
@@ -78,7 +78,19 @@ export default function StudentsPage() {
                     <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#E2EAF8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, color: '#1B3A6B', flexShrink: 0 }}>
                       {s.full_name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                     </div>
-                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#1B3A6B' }}>{s.full_name}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
+  <span style={{ fontSize: '13px', fontWeight: 600, color: '#1B3A6B' }}>{s.full_name}</span>
+  {s.grade_level && (
+    <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 7px', borderRadius: '6px', background: s.grade_level <= 4 ? '#EAF4EE' : s.grade_level <= 8 ? '#EEF3FB' : '#F0ECFB', color: s.grade_level <= 4 ? '#2E7D52' : s.grade_level <= 8 ? '#1B3A6B' : '#6B4FC8' }}>
+      {s.grade_level}. Sınıf
+    </span>
+  )}
+  {(s.classrooms as any)?.name && (
+    <span style={{ fontSize: '10px', padding: '1px 7px', borderRadius: '6px', background: '#F0F4F9', color: '#4A6080', fontWeight: 600 }}>
+      {(s.classrooms as any).name}
+    </span>
+  )}
+</div>
                   </div>
                 </td>
                 <td style={{ padding: '13px 16px', fontSize: '13px', color: '#4A6080' }}>{s.phone ?? '—'}</td>

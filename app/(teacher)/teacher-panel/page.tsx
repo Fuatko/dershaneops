@@ -49,7 +49,7 @@ export default function TeacherPanelPage() {
     if (!p) { setLoading(false); return }
     setProfile(p)
     const { data: l } = await supabase.from('lessons').select('*, profiles!lessons_student_id_fkey(full_name)').eq('teacher_id', p.id).order('scheduled_at', { ascending: false })
-    const { data: s } = await supabase.from('profiles').select('id, full_name').eq('role', 'student').order('full_name')
+    const { data: s } = await supabase.from('profiles').select('id, full_name, grade_level, classrooms(name)').eq('role', 'student').order('grade_level', { ascending: true })
     const { data: sub } = await supabase.from('subjects').select('*').order('name')
     const { data: ra } = await supabase.from('student_question_attempts').select('*, profiles!student_question_attempts_student_id_fkey(full_name), topics(name), subjects(name)').eq('teacher_id', p.id).order('created_at', { ascending: false }).limit(15)
     const { data: bks } = await supabase.from('books').select('id, name, subject, color').order('name')
@@ -308,7 +308,11 @@ export default function TeacherPanelPage() {
                   <label style={lbl}>Öğrenci *</label>
                   <select value={form.student_id} onChange={e => setForm(p => ({ ...p, student_id: e.target.value }))} style={inp} required>
                     <option value="">Öğrenci seçin...</option>
-                    {students.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+                    {students.map(s => (
+  <option key={s.id} value={s.id}>
+    {s.full_name}{s.grade_level ? ' — ' + s.grade_level + '. Sınıf' : ''}{(s.classrooms as any)?.name ? ' (' + (s.classrooms as any).name + ')' : ''}
+  </option>
+))}
                   </select>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
@@ -520,8 +524,19 @@ export default function TeacherPanelPage() {
                           {s.full_name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
                         </div>
                         <div>
-                          <div style={{ fontSize: '14px', fontWeight: 700, color: '#1B3A6B' }}>{s.full_name}</div>
-                          <div style={{ fontSize: '11.5px', color: '#7A8FA8' }}>Öğrenci</div>
+                        <div style={{ fontSize: '14px', fontWeight: 700, color: '#1B3A6B' }}>{s.full_name}</div>
+<div style={{ display: 'flex', gap: '5px', marginTop: '3px', flexWrap: 'wrap' }}>
+  {s.grade_level && (
+    <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '5px', background: s.grade_level <= 4 ? '#EAF4EE' : s.grade_level <= 8 ? '#EEF3FB' : '#F0ECFB', color: s.grade_level <= 4 ? '#2E7D52' : s.grade_level <= 8 ? '#1B3A6B' : '#6B4FC8' }}>
+      {s.grade_level}. Sınıf
+    </span>
+  )}
+  {(s.classrooms as any)?.name && (
+    <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '5px', background: '#F0F4F9', color: '#4A6080', fontWeight: 600 }}>
+      {(s.classrooms as any).name}
+    </span>
+  )}
+</div>
                         </div>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '8px' }}>
