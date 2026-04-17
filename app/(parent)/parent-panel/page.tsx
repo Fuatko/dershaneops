@@ -12,8 +12,10 @@ export default function ParentPanelPage() {
   const [homework, setHomework] = useState<any[]>([])
   const [lessons, setLessons] = useState<any[]>([])
   const [riskScore, setRiskScore] = useState(0)
+  const [goals, setGoals] = useState<any[]>([])
+  const [streak, setStreak] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('dashboard')
+  const [activeTab, setActiveTab] = useState('overview')
   const supabase = createClient()
 
   useEffect(() => { load() }, [])
@@ -21,43 +23,49 @@ export default function ParentPanelPage() {
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { window.location.href = '/login'; return }
-
     const { data: p } = await supabase.from('profiles').select('*').eq('user_id', user.id).single()
     if (!p) { setLoading(false); return }
     setProfile(p)
 
-    const { data: ps } = await supabase
-      .from('parent_students')
-      .select('student_id, profiles!parent_students_student_id_fkey(id, full_name, created_at)')
-      .eq('parent_id', p.id)
+    // Classroom map
+    const { data: classroomData } = await supabase.from('classrooms').select('id, name')
+    const classroomMap: Record<string, string> = {}
+    for (const c of classroomData ?? []) classroomMap[c.id] = c.name
 
-    const childList = (ps ?? []).map((x: any) => x.profiles).filter(Boolean)
-
-    if (childList.length === 0) {
-      const { data: allStudents } = await supabase.from('profiles').select('id, full_name, created_at').eq('role', 'student').eq('tenant_id', p.tenant_id)
-      setChildren(allStudents ?? [])
-      if (allStudents && allStudents.length > 0) await loadChildData(allStudents[0])
+    // Çocukları bul
+    const { data: ps } = await supabase.from('parent_students').select('student_id').eq('parent_id', p.id)
+    let childrenData: any[] = []
+    if (ps && ps.length > 0) {
+      const ids = ps.map(x => x.student_id)
+      const { data: kids } = await supabase.from('profiles').select('*').in('id', ids)
+      childrenData = (kids ?? []).map(k => ({ ...k, classroom_name: k.classroom_id ? (classroomMap[k.classroom_id] ?? null) : null }))
     } else {
-      setChildren(childList)
-      await loadChildData(childList[0])
+      // Fallback: aynı tenant'taki öğrenciler
+      const { data: kids } = await supabase.from('profiles').select('*').eq('role', 'student').limit(5)
+      childrenData = (kids ?? []).map(k => ({ ...k, classroom_name: k.classroom_id ? (classroomMap[k.classroom_id] ?? null) : null }))
     }
+
+    setChildren(childrenData)
+    if (childrenData.length > 0) await selectChild(childrenData[0])
     setLoading(false)
   }
 
-  async function loadChildData(child: any) {
+  async function selectChild(child: any) {
     setSelectedChild(child)
-
-    const [{ data: tp }, { data: hw }, { data: l }, { data: risk }] = await Promise.all([
-      supabase.from('student_topic_performance').select('*, topics(name), subjects(name, color)').eq('student_id', child.id).order('accuracy_rate', { ascending: false }),
+    const [{ data: tp }, { data: hw }, { data: l }, { data: g }, { data: risk }, { data: st }] = await Promise.all([
+      supabase.from('student_topic_performance').select('*, topics(name), subjects(name)').eq('student_id', child.id).order('accuracy_rate', { ascending: true }),
       supabase.from('homework_assignments').select('*, tests(name, chapters(name, books(name)))').eq('student_id', child.id).order('created_at', { ascending: false }),
       supabase.from('lessons').select('*, profiles!lessons_teacher_id_fkey(full_name)').eq('student_id', child.id).order('scheduled_at', { ascending: false }).limit(10),
+      supabase.from('student_goals').select('*').eq('student_id', child.id).eq('status', 'active'),
       supabase.rpc('calculate_risk_score', { p_student_id: child.id }),
+      supabase.from('student_streaks').select('*').eq('student_id', child.id).single(),
     ])
-
     setTopicPerf(tp ?? [])
     setHomework(hw ?? [])
     setLessons(l ?? [])
+    setGoals(g ?? [])
     setRiskScore(risk ?? 0)
+    setStreak(st)
   }
 
   async function signOut() {
@@ -65,46 +73,47 @@ export default function ParentPanelPage() {
     window.location.href = '/login'
   }
 
+  function getLevelStyle(grade: number) {
+    if (grade <= 4) return { color: '#2E7D52', bg: '#EAF4EE' }
+    if (grade <= 8) return { color: '#1B3A6B', bg: '#EEF3FB' }
+    return { color: '#6B4FC8', bg: '#F0ECFB' }
+  }
+
   const totalQ = topicPerf.reduce((s, t) => s + t.total_questions, 0)
   const totalC = topicPerf.reduce((s, t) => s + t.correct_count, 0)
   const overallRate = totalQ > 0 ? Math.round(totalC / totalQ * 100) : 0
   const completedHw = homework.filter(h => h.status === 'completed').length
   const pendingHw = homework.filter(h => h.status !== 'completed').length
-  const completedL = lessons.filter(l => l.status === 'completed').length
-  const strongTopics = topicPerf.filter(t => t.accuracy_rate >= 70)
-  const weakTopics = topicPerf.filter(t => t.accuracy_rate < 50)
-
-  function getRiskLabel(score: number) {
-    if (score >= 70) return { label: 'Kritik', color: '#C0392B', bg: '#FEF2F2' }
-    if (score >= 45) return { label: 'Yüksek', color: '#B45309', bg: '#FDF4E7' }
-    if (score >= 20) return { label: 'Orta', color: '#1B3A6B', bg: '#EEF3FB' }
-    return { label: 'İyi', color: '#2E7D52', bg: '#EAF4EE' }
-  }
-
-  const rl = getRiskLabel(riskScore)
+  const completedLessons = lessons.filter(l => l.status === 'completed').length
+  const riskVal = Math.round(riskScore)
+  const riskColor = riskVal >= 70 ? '#C0392B' : riskVal >= 45 ? '#B45309' : '#2E7D52'
+  const rateColor = overallRate >= 70 ? '#2E7D52' : overallRate >= 50 ? '#B45309' : '#C0392B'
 
   const TABS = [
-    { id: 'dashboard', label: 'Genel Durum' },
-    { id: 'performance', label: 'Performans' },
-    { id: 'homework', label: 'Ödevler' },
-    { id: 'lessons', label: 'Dersler' },
+    { id: 'overview', label: '📊 Genel Durum' },
+    { id: 'performance', label: '📈 Performans' },
+    { id: 'homework', label: '📝 Ödevler' },
+    { id: 'lessons', label: '📅 Dersler' },
   ]
 
-  if (loading) return <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', color: '#7A8FA8' }}>Yükleniyor...</div>
+  if (loading) return (
+    <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', background: '#F0F4F9' }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: '36px', marginBottom: '12px' }}>👨‍👩‍👧</div>
+        <div style={{ fontSize: '14px', color: '#7A8FA8' }}>Yükleniyor...</div>
+      </div>
+    </div>
+  )
 
   return (
     <div style={{ display: 'flex', height: '100vh', background: '#F0F4F9', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
-
-      {/* Sidebar */}
       <aside style={{ width: '220px', background: '#fff', borderRight: '1px solid #D5DFF0', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
         <div style={{ padding: '18px 16px', borderBottom: '1px solid #D5DFF0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: '30px', height: '30px', borderRadius: '7px', background: '#6B4FC8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: '30px', height: '30px', borderRadius: '7px', background: '#B45309', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <rect x="1" y="1" width="5" height="5" rx="1" fill="white" opacity=".9"/>
-                <rect x="8" y="1" width="5" height="5" rx="1" fill="white" opacity=".5"/>
-                <rect x="1" y="8" width="5" height="5" rx="1" fill="white" opacity=".5"/>
-                <rect x="8" y="8" width="5" height="5" rx="1" fill="white" opacity=".9"/>
+                <circle cx="7" cy="5" r="3" stroke="white" strokeWidth="1.5"/>
+                <path d="M1 13c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
               </svg>
             </div>
             <div>
@@ -115,20 +124,36 @@ export default function ParentPanelPage() {
         </div>
 
         {profile && (
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid #D5DFF0' }}>
-            <div style={{ fontSize: '11px', color: '#7A8FA8', marginBottom: '6px', fontWeight: 600 }}>HOŞGELDİNİZ</div>
-            <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#1B3A6B' }}>{profile.full_name}</div>
+          <div style={{ padding: '14px 16px', borderBottom: '1px solid #D5DFF0' }}>
+            <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#1B3A6B', marginBottom: '2px' }}>{profile.full_name}</div>
+            <div style={{ fontSize: '10px', color: '#B45309', fontWeight: 600 }}>Veli</div>
           </div>
         )}
 
+        {/* Çocuk seçimi */}
         {children.length > 1 && (
-          <div style={{ padding: '10px 8px', borderBottom: '1px solid #D5DFF0' }}>
-            <div style={{ fontSize: '10.5px', fontWeight: 700, color: '#7A8FA8', padding: '0 8px 6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Çocuğunuz</div>
-            {children.map(c => (
-              <button key={c.id} onClick={() => loadChildData(c)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: '7px', marginBottom: '2px', fontSize: '12.5px', fontWeight: selectedChild?.id === c.id ? 700 : 500, color: '#1B3A6B', background: selectedChild?.id === c.id ? '#E2EAF8' : 'transparent', border: 'none', cursor: 'pointer' }}>
-                {c.full_name}
-              </button>
-            ))}
+          <div style={{ padding: '12px', borderBottom: '1px solid #D5DFF0' }}>
+            <div style={{ fontSize: '10px', color: '#7A8FA8', fontWeight: 600, marginBottom: '6px' }}>ÇOCUĞUM</div>
+            {children.map(c => {
+              const lv = c.grade_level ? getLevelStyle(c.grade_level) : null
+              return (
+                <div key={c.id} onClick={() => selectChild(c)} style={{ padding: '8px 10px', borderRadius: '8px', cursor: 'pointer', background: selectedChild?.id === c.id ? '#EEF3FB' : 'transparent', marginBottom: '3px' }}>
+                  <div style={{ fontSize: '12.5px', fontWeight: 600, color: '#1B3A6B' }}>{c.full_name}</div>
+                  <div style={{ display: 'flex', gap: '4px', marginTop: '2px' }}>
+                    {lv && c.grade_level && (
+                      <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '5px', background: lv.bg, color: lv.color }}>
+                        {c.grade_level}. Sınıf
+                      </span>
+                    )}
+                    {c.classroom_name && (
+                      <span style={{ fontSize: '10px', padding: '1px 5px', borderRadius: '5px', background: '#F0F4F9', color: '#4A6080', fontWeight: 600 }}>
+                        {c.classroom_name}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
 
@@ -147,185 +172,199 @@ export default function ParentPanelPage() {
         </div>
       </aside>
 
-      {/* Main */}
       <main style={{ flex: 1, overflowY: 'auto', padding: '28px' }}>
 
-        {!selectedChild ? (
-          <div style={{ padding: '60px', textAlign: 'center', color: '#7A8FA8' }}>Öğrenci verisi bulunamadı</div>
-        ) : (
-          <>
-            {/* GENEL DURUM */}
-            {activeTab === 'dashboard' && (
-              <div style={{ maxWidth: '900px' }}>
-                <div style={{ marginBottom: '24px' }}>
-                  <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', margin: 0 }}>{selectedChild.full_name}</h1>
-                  <p style={{ fontSize: '12px', color: '#7A8FA8', margin: '3px 0 0' }}>Akademik gelişim özeti</p>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '10px', marginBottom: '24px' }}>
-                  {[
-                    { label: 'Genel Başarı', value: '%' + overallRate, color: overallRate >= 70 ? '#2E7D52' : overallRate >= 50 ? '#B45309' : '#C0392B', bg: overallRate >= 70 ? '#EAF4EE' : overallRate >= 50 ? '#FDF4E7' : '#FEF2F2' },
-                    { label: 'Risk Durumu', value: rl.label, color: rl.color, bg: rl.bg },
-                    { label: 'Tamamlanan Ödev', value: completedHw + '/' + homework.length, color: '#1B3A6B', bg: '#EEF3FB' },
-                    { label: 'Tamamlanan Ders', value: completedL + '/' + lessons.length, color: '#6B4FC8', bg: '#F0ECFB' },
-                  ].map(m => (
-                    <div key={m.label} style={{ background: m.bg, borderRadius: '10px', padding: '14px 16px' }}>
-                      <div style={{ fontSize: '11px', color: m.color, fontWeight: 600, marginBottom: '4px' }}>{m.label}</div>
-                      <div style={{ fontSize: '22px', fontWeight: 700, color: m.color }}>{m.value}</div>
-                    </div>
-                  ))}
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                  <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '18px' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#2E7D52', marginBottom: '12px' }}>Güçlü Yönler ({strongTopics.length})</div>
-                    {strongTopics.length === 0 ? (
-                      <div style={{ fontSize: '12px', color: '#7A8FA8' }}>Henüz yeterli veri yok</div>
-                    ) : strongTopics.slice(0, 4).map(t => (
-                      <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F0F4F9', fontSize: '12.5px' }}>
-                        <span style={{ color: '#374151' }}>{t.subjects?.name} — {t.topics?.name}</span>
-                        <span style={{ fontWeight: 700, color: '#2E7D52' }}>%{Math.round(t.accuracy_rate)}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '18px' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#C0392B', marginBottom: '12px' }}>Gelişim Alanları ({weakTopics.length})</div>
-                    {weakTopics.length === 0 ? (
-                      <div style={{ fontSize: '12px', color: '#2E7D52' }}>Kritik alan yok!</div>
-                    ) : weakTopics.slice(0, 4).map(t => (
-                      <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F0F4F9', fontSize: '12.5px' }}>
-                        <span style={{ color: '#374151' }}>{t.subjects?.name} — {t.topics?.name}</span>
-                        <span style={{ fontWeight: 700, color: '#C0392B' }}>%{Math.round(t.accuracy_rate)}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '18px' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B', marginBottom: '12px' }}>Son Ödevler</div>
-                    {homework.slice(0, 4).map((h, i) => (
-                      <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '7px 0', borderBottom: i < 3 ? '1px solid #F0F4F9' : 'none' }}>
-                        <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: h.status === 'completed' ? '#2E7D52' : '#B45309', flexShrink: 0 }} />
-                        <span style={{ flex: 1, fontSize: '12.5px', color: '#374151' }}>{h.tests?.name}</span>
-                        <span style={{ fontSize: '10.5px', fontWeight: 600, padding: '2px 7px', borderRadius: '8px', background: h.status === 'completed' ? '#EAF4EE' : '#FDF4E7', color: h.status === 'completed' ? '#2E7D52' : '#B45309' }}>
-                          {h.status === 'completed' ? 'Tamam' : 'Bekliyor'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '18px' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B', marginBottom: '12px' }}>Son Dersler</div>
-                    {lessons.slice(0, 4).map((l, i) => (
-                      <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '7px 0', borderBottom: i < 3 ? '1px solid #F0F4F9' : 'none' }}>
-                        <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: l.status === 'completed' ? '#2E7D52' : '#1B3A6B', flexShrink: 0 }} />
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: '12.5px', color: '#374151' }}>{l.subject}</div>
-                          <div style={{ fontSize: '11px', color: '#7A8FA8' }}>{l.profiles?.full_name}</div>
-                        </div>
-                        <span style={{ fontSize: '11px', color: '#7A8FA8' }}>{new Date(l.scheduled_at).toLocaleDateString('tr-TR')}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* PERFORMANS */}
-            {activeTab === 'performance' && (
-              <div style={{ maxWidth: '900px' }}>
-                <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', marginBottom: '20px' }}>Konu Performansı</h1>
-                {topicPerf.length === 0 ? (
-                  <div style={{ background: '#FDF4E7', border: '1px solid #FED7AA', borderRadius: '12px', padding: '40px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '13px', color: '#B45309' }}>Henüz veri yok</div>
-                  </div>
-                ) : (
-                  <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '20px' }}>
-                    {topicPerf.map(t => {
-                      const color = t.accuracy_rate >= 70 ? '#2E7D52' : t.accuracy_rate >= 50 ? '#B45309' : '#C0392B'
-                      const bg = t.accuracy_rate >= 70 ? '#EAF4EE' : t.accuracy_rate >= 50 ? '#FDF4E7' : '#FEF2F2'
-                      return (
-                        <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', borderRadius: '8px', background: bg, marginBottom: '8px' }}>
-                          <div style={{ width: '140px', flexShrink: 0 }}>
-                            <div style={{ fontSize: '12px', fontWeight: 600, color }}>{t.topics?.name}</div>
-                            <div style={{ fontSize: '10.5px', color: '#7A8FA8' }}>{t.subjects?.name}</div>
-                          </div>
-                          <div style={{ flex: 1, height: '8px', background: 'rgba(0,0,0,0.08)', borderRadius: '4px', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: Math.min(t.accuracy_rate, 100) + '%', background: color, borderRadius: '4px' }} />
-                          </div>
-                          <span style={{ fontSize: '14px', fontWeight: 800, color, width: '44px', textAlign: 'right' }}>%{Math.round(t.accuracy_rate)}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
+        {/* Çocuk Başlık */}
+        {selectedChild && (
+          <div style={{ background: '#1B3A6B', borderRadius: '14px', padding: '18px 22px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+              {selectedChild.full_name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '18px', fontWeight: 800, color: '#fff', marginBottom: '4px' }}>{selectedChild.full_name}</div>
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                {selectedChild.grade_level && (
+                  <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '8px', background: 'rgba(255,255,255,0.2)', color: '#fff' }}>
+                    {selectedChild.grade_level}. Sınıf
+                  </span>
+                )}
+                {selectedChild.classroom_name && (
+                  <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '8px', background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.9)' }}>
+                    {selectedChild.classroom_name}
+                  </span>
+                )}
+                {streak && (
+                  <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '8px', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.8)' }}>
+                    🔥 {streak.current_streak} gün serisi
+                  </span>
                 )}
               </div>
-            )}
+            </div>
+          </div>
+        )}
 
-            {/* ÖDEVLERİ */}
-            {activeTab === 'homework' && (
-              <div style={{ maxWidth: '900px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                  <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', margin: 0 }}>Ödevler</h1>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <span style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '8px', background: '#FDF4E7', color: '#B45309', fontWeight: 600 }}>Bekleyen: {pendingHw}</span>
-                    <span style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '8px', background: '#EAF4EE', color: '#2E7D52', fontWeight: 600 }}>Tamamlanan: {completedHw}</span>
+        {/* GENEL DURUM */}
+        {activeTab === 'overview' && (
+          <div style={{ maxWidth: '800px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '10px', marginBottom: '20px' }}>
+              {[
+                { label: 'Genel Başarı', value: '%' + overallRate, color: rateColor, bg: overallRate >= 70 ? '#EAF4EE' : overallRate >= 50 ? '#FDF4E7' : '#FEF2F2' },
+                { label: 'Risk Skoru', value: riskVal + '/100', color: riskColor, bg: riskVal >= 70 ? '#FEF2F2' : riskVal >= 45 ? '#FDF4E7' : '#EAF4EE' },
+                { label: 'Tamamlanan Ödev', value: completedHw + '/' + homework.length, color: '#6B4FC8', bg: '#F0ECFB' },
+                { label: 'Tamamlanan Ders', value: completedLessons + '/' + lessons.length, color: '#1B3A6B', bg: '#EEF3FB' },
+              ].map(m => (
+                <div key={m.label} style={{ background: m.bg, borderRadius: '10px', padding: '14px' }}>
+                  <div style={{ fontSize: '11px', color: m.color, fontWeight: 600, marginBottom: '3px' }}>{m.label}</div>
+                  <div style={{ fontSize: '22px', fontWeight: 800, color: m.color }}>{m.value}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+              <div style={{ background: '#EAF4EE', border: '1px solid #D1FAE5', borderRadius: '12px', padding: '16px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#2E7D52', marginBottom: '8px' }}>✓ Güçlü Konular</div>
+                {topicPerf.filter(t => t.accuracy_rate >= 70).length === 0 ? (
+                  <div style={{ fontSize: '12px', color: '#7A8FA8' }}>Henüz veri yok</div>
+                ) : topicPerf.filter(t => t.accuracy_rate >= 70).slice(0, 4).map(t => (
+                  <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid rgba(0,0,0,0.05)', fontSize: '12px' }}>
+                    <span style={{ color: '#374151' }}>{t.subjects?.name} — {t.topics?.name ?? 'Genel'}</span>
+                    <strong style={{ color: '#2E7D52' }}>%{Math.round(t.accuracy_rate)}</strong>
                   </div>
-                </div>
-                <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', overflow: 'hidden' }}>
-                  {homework.length === 0 ? (
-                    <div style={{ padding: '40px', textAlign: 'center', color: '#7A8FA8' }}>Ödev yok</div>
-                  ) : homework.map((h, i) => {
-                    const isDone = h.status === 'completed'
-                    return (
-                      <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '13px 18px', borderBottom: i < homework.length - 1 ? '1px solid #F0F4F9' : 'none' }}>
-                        <div style={{ width: '36px', height: '36px', borderRadius: '9px', background: isDone ? '#EAF4EE' : '#EEF3FB', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, color: isDone ? '#2E7D52' : '#1B3A6B', flexShrink: 0 }}>
-                          {isDone ? '✓' : '—'}
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: '13px', fontWeight: 600, color: '#1B3A6B' }}>{h.tests?.name}</div>
-                          <div style={{ fontSize: '11.5px', color: '#7A8FA8' }}>{h.tests?.chapters?.books?.name}</div>
-                        </div>
-                        <span style={{ fontSize: '11.5px', fontWeight: 600, padding: '3px 10px', borderRadius: '20px', background: isDone ? '#EAF4EE' : '#FDF4E7', color: isDone ? '#2E7D52' : '#B45309' }}>
-                          {isDone ? 'Tamamlandı' : 'Bekliyor'}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
+                ))}
               </div>
-            )}
 
-            {/* DERSLER */}
-            {activeTab === 'lessons' && (
-              <div style={{ maxWidth: '900px' }}>
-                <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', marginBottom: '20px' }}>Dersler ({lessons.length})</h1>
-                <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', overflow: 'hidden' }}>
-                  {lessons.length === 0 ? (
-                    <div style={{ padding: '40px', textAlign: 'center', color: '#7A8FA8' }}>Ders kaydı yok</div>
-                  ) : lessons.map((l, i) => {
-                    const STATUS: any = {
-                      completed: { bg: '#EAF4EE', color: '#2E7D52', label: 'Tamamlandı' },
-                      scheduled: { bg: '#EEF3FB', color: '#1B3A6B', label: 'Planlandı' },
-                      cancelled: { bg: '#FEF2F2', color: '#C0392B', label: 'İptal' },
-                    }
-                    const st = STATUS[l.status] ?? STATUS.scheduled
+              <div style={{ background: '#FEF2F2', border: '1px solid #FEE2E2', borderRadius: '12px', padding: '16px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#C0392B', marginBottom: '8px' }}>⚠ Gelişim Alanları</div>
+                {topicPerf.filter(t => t.accuracy_rate < 50).length === 0 ? (
+                  <div style={{ fontSize: '12px', color: '#2E7D52', fontWeight: 600 }}>Kritik alan yok!</div>
+                ) : topicPerf.filter(t => t.accuracy_rate < 50).slice(0, 4).map(t => (
+                  <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid rgba(0,0,0,0.05)', fontSize: '12px' }}>
+                    <span style={{ color: '#374151' }}>{t.subjects?.name} — {t.topics?.name ?? 'Genel'}</span>
+                    <strong style={{ color: '#C0392B' }}>%{Math.round(t.accuracy_rate)}</strong>
+                  </div>
+                ))}
+              </div>
+
+              {goals.length > 0 && (
+                <div style={{ background: '#fff', border: '1px solid #D5DFF0', borderRadius: '12px', padding: '16px', gridColumn: '1 / -1' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#1B3A6B', marginBottom: '10px' }}>🎯 Hedefler</div>
+                  {goals.map(g => {
+                    const prog = g.target_score > 0 ? Math.min(Math.round(g.current_score / g.target_score * 100), 100) : 0
                     return (
-                      <div key={l.id} style={{ padding: '13px 18px', borderBottom: i < lessons.length - 1 ? '1px solid #F0F4F9' : 'none', display: 'flex', alignItems: 'center', gap: '14px' }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: '13px', fontWeight: 600, color: '#1B3A6B', marginBottom: '2px' }}>{l.subject}</div>
-                          <div style={{ fontSize: '11.5px', color: '#7A8FA8' }}>
-                            Öğretmen: {l.profiles?.full_name} — {new Date(l.scheduled_at).toLocaleDateString('tr-TR')}
-                          </div>
+                      <div key={g.id} style={{ marginBottom: '10px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                          <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#1B3A6B' }}>{g.target_exam}</span>
+                          <span style={{ fontSize: '12px', color: '#7A8FA8' }}>Hedef: {g.target_score} — Mevcut: {g.current_score}</span>
                         </div>
-                        <span style={{ fontSize: '11px', fontWeight: 600, padding: '3px 9px', borderRadius: '20px', background: st.bg, color: st.color }}>{st.label}</span>
+                        <div style={{ height: '8px', background: '#F0F4F9', borderRadius: '4px', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: prog + '%', background: prog >= 80 ? '#2E7D52' : prog >= 50 ? '#B45309' : '#1B3A6B', borderRadius: '4px' }} />
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#7A8FA8', marginTop: '3px' }}>%{prog} tamamlandı</div>
                       </div>
                     )
                   })}
                 </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* PERFORMANS */}
+        {activeTab === 'performance' && (
+          <div style={{ maxWidth: '700px' }}>
+            <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', marginBottom: '20px' }}>Konu Performansı</h1>
+            {topicPerf.length === 0 ? (
+              <div style={{ background: '#F8FAFF', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '40px', textAlign: 'center', color: '#7A8FA8' }}>Henüz veri yok</div>
+            ) : (
+              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {topicPerf.map(t => {
+                  const color = t.accuracy_rate >= 70 ? '#2E7D52' : t.accuracy_rate >= 50 ? '#B45309' : '#C0392B'
+                  const bg = t.accuracy_rate >= 70 ? '#EAF4EE' : t.accuracy_rate >= 50 ? '#FDF4E7' : '#FEF2F2'
+                  return (
+                    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '10px', background: bg }}>
+                      <div style={{ width: '120px', flexShrink: 0 }}>
+                        <div style={{ fontSize: '12.5px', fontWeight: 700, color }}>{t.topics?.name ?? 'Genel'}</div>
+                        <div style={{ fontSize: '10.5px', color: '#7A8FA8' }}>{t.subjects?.name}</div>
+                      </div>
+                      <div style={{ flex: 1, height: '8px', background: 'rgba(0,0,0,0.08)', borderRadius: '4px', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: Math.min(t.accuracy_rate, 100) + '%', background: color, borderRadius: '4px' }} />
+                      </div>
+                      <span style={{ fontSize: '15px', fontWeight: 800, color, width: '44px', textAlign: 'right', flexShrink: 0 }}>
+                        %{Math.round(t.accuracy_rate)}
+                      </span>
+                    </div>
+                  )
+                })}
               </div>
             )}
-          </>
+          </div>
+        )}
+
+        {/* ÖDEVLER */}
+        {activeTab === 'homework' && (
+          <div style={{ maxWidth: '700px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', margin: 0 }}>Ödevler</h1>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <span style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '20px', background: '#FDF4E7', color: '#B45309', fontWeight: 600 }}>Bekleyen: {pendingHw}</span>
+                <span style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '20px', background: '#EAF4EE', color: '#2E7D52', fontWeight: 600 }}>Tamam: {completedHw}</span>
+              </div>
+            </div>
+            {homework.length === 0 ? (
+              <div style={{ background: '#F8FAFF', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '40px', textAlign: 'center', color: '#7A8FA8' }}>Henüz ödev yok</div>
+            ) : homework.map((h, i) => {
+              const isDone = h.status === 'completed'
+              const isLate = !isDone && h.deadline && new Date(h.deadline) < new Date()
+              return (
+                <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 18px', marginBottom: '8px', borderRadius: '12px', background: '#fff', border: '1px solid', borderColor: isDone ? '#D1FAE5' : isLate ? '#FECACA' : '#D5DFF0' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: isDone ? '#EAF4EE' : isLate ? '#FEF2F2' : '#EEF3FB', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', flexShrink: 0 }}>
+                    {isDone ? '✅' : isLate ? '⏰' : '📝'}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B', marginBottom: '2px' }}>{h.tests?.name}</div>
+                    <div style={{ fontSize: '11.5px', color: '#7A8FA8' }}>{h.tests?.chapters?.books?.name}</div>
+                  </div>
+                  <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '4px 12px', borderRadius: '20px', background: isDone ? '#EAF4EE' : isLate ? '#FEF2F2' : '#FDF4E7', color: isDone ? '#2E7D52' : isLate ? '#C0392B' : '#B45309' }}>
+                    {isDone ? 'Tamam' : isLate ? 'Gecikti!' : 'Bekliyor'}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* DERSLER */}
+        {activeTab === 'lessons' && (
+          <div style={{ maxWidth: '700px' }}>
+            <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', marginBottom: '20px' }}>Dersler</h1>
+            {lessons.length === 0 ? (
+              <div style={{ background: '#F8FAFF', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '40px', textAlign: 'center', color: '#7A8FA8' }}>Ders kaydı yok</div>
+            ) : lessons.map((l, i) => {
+              const STATUS: any = {
+                completed: { bg: '#EAF4EE', color: '#2E7D52', label: 'Tamamlandı' },
+                scheduled: { bg: '#EEF3FB', color: '#1B3A6B', label: 'Planlandı' },
+                cancelled: { bg: '#FEF2F2', color: '#C0392B', label: 'İptal' },
+              }
+              const st = STATUS[l.status] ?? STATUS.scheduled
+              return (
+                <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 18px', marginBottom: '8px', borderRadius: '12px', background: '#fff', border: '1px solid #D5DFF0' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: st.bg, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <div style={{ fontSize: '12px', fontWeight: 800, color: st.color }}>{new Date(l.scheduled_at).toLocaleDateString('tr-TR', { day: 'numeric' })}</div>
+                    <div style={{ fontSize: '9px', color: st.color }}>{new Date(l.scheduled_at).toLocaleDateString('tr-TR', { month: 'short' })}</div>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B', marginBottom: '2px' }}>{l.subject}</div>
+                    <div style={{ fontSize: '11.5px', color: '#7A8FA8' }}>
+                      {(l.profiles as any)?.full_name} • {new Date(l.scheduled_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: '11px', fontWeight: 600, padding: '3px 10px', borderRadius: '20px', background: st.bg, color: st.color }}>
+                    {st.label}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
         )}
       </main>
     </div>
