@@ -42,24 +42,58 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Giriş yapmış → role bazlı yönlendirme
-  if (user && (pathname === '/' || pathname === '/dashboard')) {
+  if (user) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role, is_super_admin')
+      .select('role')
       .eq('user_id', user.id)
       .single()
 
-    if (profile) {
-      if (profile.is_super_admin) {
-        if (pathname === '/') return NextResponse.redirect(new URL('/dashboard', request.url))
-      } else if (profile.role === 'student') {
-        return NextResponse.redirect(new URL('/student-panel', request.url))
-      } else if (profile.role === 'teacher') {
-        return NextResponse.redirect(new URL('/teacher-panel', request.url))
-      } else if (profile.role === 'parent') {
-        return NextResponse.redirect(new URL('/parent-panel', request.url))
-      }
+    const role = profile?.role
+    const isAdminLike = role === 'admin' || role === 'superadmin'
+
+    // Login veya ana sayfaya gelince role göre yönlendir
+    if (pathname === '/' || pathname === '/login') {
+      if (isAdminLike) return NextResponse.redirect(new URL('/dashboard', request.url))
+      if (role === 'teacher') return NextResponse.redirect(new URL('/teacher-panel', request.url))
+      if (role === 'student') return NextResponse.redirect(new URL('/student-panel', request.url))
+      if (role === 'parent') return NextResponse.redirect(new URL('/parent-panel', request.url))
+    }
+
+    // Öğrenci sayfası — sadece student
+    if (pathname.startsWith('/student-panel') && role !== 'student' && !isAdminLike) {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
+    }
+
+    // Öğretmen sayfası — sadece teacher
+    if (pathname.startsWith('/teacher-panel') && role !== 'teacher' && !isAdminLike) {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
+    }
+
+    // Veli sayfası — sadece parent
+    if (pathname.startsWith('/parent-panel') && role !== 'parent' && !isAdminLike) {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
+    }
+
+    // Superadmin sayfası — sadece superadmin
+    if (pathname.startsWith('/superadmin') && role !== 'superadmin') {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
+    }
+
+    // Admin sayfaları — sadece admin ve superadmin
+    const adminPaths = [
+      '/dashboard', '/students', '/teachers', '/scheduler',
+      '/books', '/risk', '/coordinator', '/guidance', '/outcomes',
+      '/reports', '/swot', '/exams', '/prediction', '/scenario',
+      '/institution', '/parentreport', '/goals', '/daily-tasks',
+      '/performance', '/exam-analytics', '/notifications',
+    ]
+    const isAdminPath = adminPaths.some(p => pathname.startsWith(p))
+    if (isAdminPath && !isAdminLike) {
+      if (role === 'student') return NextResponse.redirect(new URL('/student-panel', request.url))
+      if (role === 'teacher') return NextResponse.redirect(new URL('/teacher-panel', request.url))
+      if (role === 'parent') return NextResponse.redirect(new URL('/parent-panel', request.url))
+      return NextResponse.redirect(new URL('/login', request.url))
     }
   }
 
@@ -67,5 +101,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|icon|sw.js|manifest.json).*)'],
 }
