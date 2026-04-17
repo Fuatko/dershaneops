@@ -18,6 +18,7 @@ export default function StudentPanelPage() {
   const [activeTab, setActiveTab] = useState('today')
   const [celebration, setCelebration] = useState(false)
   const [celebrationMsg, setCelebrationMsg] = useState('')
+  const [menuOpen, setMenuOpen] = useState(false)
   const supabase = createClient()
 
   useEffect(() => { load() }, [])
@@ -28,7 +29,6 @@ export default function StudentPanelPage() {
     const { data: p } = await supabase.from('profiles').select('*').eq('user_id', user.id).single()
     if (!p) { setLoading(false); return }
     setProfile(p)
-
     const [{ data: tp }, { data: hw }, { data: sp }, { data: risk }, { data: st }, { data: sb }, { data: dt }, { data: g }] = await Promise.all([
       supabase.from('student_topic_performance').select('*, topics(name), subjects(name, color)').eq('student_id', p.id).order('accuracy_rate', { ascending: true }),
       supabase.from('homework_assignments').select('*, tests(name, chapters(name, books(name)))').eq('student_id', p.id).order('created_at', { ascending: false }),
@@ -39,7 +39,6 @@ export default function StudentPanelPage() {
       supabase.from('daily_tasks').select('*, subjects(name, color), topics(name)').eq('student_id', p.id).eq('task_date', new Date().toISOString().slice(0, 10)).order('status'),
       supabase.from('student_goals').select('*').eq('student_id', p.id).eq('status', 'active'),
     ])
-
     setTopicPerf(tp ?? [])
     setHomework(hw ?? [])
     setStudyPlan(sp)
@@ -58,34 +57,19 @@ export default function StudentPanelPage() {
     await supabase.from('daily_tasks').update({ status: 'completed', completed_at: new Date().toISOString(), score }).eq('id', taskId)
     const today = new Date().toISOString().slice(0, 10)
     if (streak) {
-      const lastActive = streak.last_active_date
       const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
-      const newStreak = lastActive === today ? streak.current_streak : (lastActive === yesterday ? streak.current_streak + 1 : 1)
-      const newPoints = (streak.total_points ?? 0) + score
-      const newDailyScore = Math.min((streak.daily_score ?? 0) + score, 100)
-      await supabase.from('student_streaks').update({ current_streak: newStreak, longest_streak: Math.max(newStreak, streak.longest_streak ?? 0), last_active_date: today, total_points: newPoints, daily_score: newDailyScore, updated_at: new Date().toISOString() }).eq('student_id', profile.id)
+      const newStreak = streak.last_active_date === today ? streak.current_streak : (streak.last_active_date === yesterday ? streak.current_streak + 1 : 1)
+      await supabase.from('student_streaks').update({ current_streak: newStreak, longest_streak: Math.max(newStreak, streak.longest_streak ?? 0), last_active_date: today, total_points: (streak.total_points ?? 0) + score, daily_score: Math.min((streak.daily_score ?? 0) + score, 100), updated_at: new Date().toISOString() }).eq('student_id', profile.id)
     } else {
       await supabase.from('student_streaks').insert({ student_id: profile.id, current_streak: 1, longest_streak: 1, last_active_date: today, total_points: score, daily_score: score })
     }
-    await fetch('/api/events', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        student_id: profile.id,
-        event_type: score >= 95 ? 'high_performance' : 'task_completed',
-        event_data: { student_name: profile.full_name, message: profile.full_name + ' görevini tamamladı: ' + (task.subjects?.name ?? 'Görev') }
-      })
-    })
     const remaining = dailyTasks.filter(t => t.status === 'pending' && t.id !== taskId).length
     if (remaining === 0) { setCelebrationMsg('Tüm görevleri tamamladın! 🎉'); setCelebration(true); setTimeout(() => setCelebration(false), 4000) }
     else if (score >= 95) { setCelebrationMsg('Mükemmel! ' + score + ' puan! ⭐'); setCelebration(true); setTimeout(() => setCelebration(false), 2500) }
     await load()
   }
 
-  async function signOut() {
-    await supabase.auth.signOut()
-    window.location.href = '/login'
-  }
+  async function signOut() { await supabase.auth.signOut(); window.location.href = '/login' }
 
   const totalQ = topicPerf.reduce((s, t) => s + t.total_questions, 0)
   const totalC = topicPerf.reduce((s, t) => s + t.correct_count, 0)
@@ -106,16 +90,15 @@ export default function StudentPanelPage() {
     if (score >= 50) return { msg: 'İyi iş, devam et!', color: '#1B3A6B', bg: '#EEF3FB', emoji: '💪' }
     return { msg: 'Bugün daha fazlasını yapabilirsin!', color: '#7A8FA8', bg: '#F0F4F9', emoji: '🎯' }
   }
-
   const fb = getDailyScoreFeedback(dailyScore)
 
   const TABS = [
-    { id: 'today', label: '📅 Bugün' },
-    { id: 'performance', label: '📊 Performans' },
-    { id: 'homework', label: '📚 Ödevler' },
-    { id: 'plan', label: '🗓 Plan' },
-    { id: 'goals', label: '🎯 Hedefler' },
-    { id: 'swot', label: '🔍 SWOT' },
+    { id: 'today', label: '📅 Bugün', icon: '📅' },
+    { id: 'performance', label: '📊 Performans', icon: '📊' },
+    { id: 'homework', label: '📚 Ödevler', icon: '📚' },
+    { id: 'plan', label: '🗓 Plan', icon: '🗓' },
+    { id: 'goals', label: '🎯 Hedefler', icon: '🎯' },
+    { id: 'swot', label: '🔍 SWOT', icon: '🔍' },
   ]
 
   if (loading) return (
@@ -128,169 +111,180 @@ export default function StudentPanelPage() {
   )
 
   return (
-    <div style={{ display: 'flex', height: '100vh', background: '#F0F4F9', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: '#F0F4F9', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
 
+      {/* Kutlama */}
       {celebration && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, pointerEvents: 'none' }}>
-          <div style={{ background: '#1B3A6B', borderRadius: '20px', padding: '28px 40px', textAlign: 'center', boxShadow: '0 20px 60px rgba(27,58,107,0.4)' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, pointerEvents: 'none', background: 'rgba(0,0,0,0.3)' }}>
+          <div style={{ background: '#1B3A6B', borderRadius: '20px', padding: '28px 40px', textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.4)' }}>
             <div style={{ fontSize: '52px', marginBottom: '10px' }}>🎉</div>
-            <div style={{ fontSize: '22px', fontWeight: 800, color: '#fff' }}>{celebrationMsg}</div>
+            <div style={{ fontSize: '20px', fontWeight: 800, color: '#fff' }}>{celebrationMsg}</div>
           </div>
         </div>
       )}
 
-      <aside style={{ width: '200px', background: '#fff', borderRight: '1px solid #D5DFF0', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-        <div style={{ padding: '16px', borderBottom: '1px solid #D5DFF0', background: '#1B3A6B' }}>
-          <div style={{ fontSize: '13px', fontWeight: 800, color: '#fff' }}>DershaneOPS</div>
-          <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.6)', marginTop: '2px' }}>Öğrenci Paneli</div>
+      {/* Mobil Header */}
+      <div style={{ background: '#1B3A6B', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 800, color: '#fff' }}>D</div>
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>DershaneOPS</div>
+            <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.6)' }}>{profile?.full_name?.split(' ')[0]}</div>
+          </div>
         </div>
-
-        {profile && (
-          <div style={{ padding: '14px 16px', borderBottom: '1px solid #D5DFF0', background: '#F8FAFF' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: '#1B3A6B', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                {profile.full_name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
-              </div>
-              <div>
-                <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#1B3A6B' }}>{profile.full_name?.split(' ')[0]}</div>
-                {streak && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
-                    <span style={{ fontSize: '13px' }}>🔥</span>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#B45309' }}>{streak.current_streak} gün</span>
-                  </div>
-                )}
-              </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {streak && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(255,255,255,0.1)', padding: '5px 10px', borderRadius: '20px' }}>
+              <span style={{ fontSize: '14px' }}>🔥</span>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: '#fff' }}>{streak.current_streak}</span>
             </div>
-          </div>
-        )}
-
-        {streak && (
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid #D5DFF0' }}>
-            <div style={{ fontSize: '10px', color: '#7A8FA8', fontWeight: 600, marginBottom: '6px' }}>GÜNLÜK SKOR</div>
-            <div style={{ height: '8px', background: '#F0F4F9', borderRadius: '4px', overflow: 'hidden', marginBottom: '5px' }}>
-              <div style={{ height: '100%', width: dailyScore + '%', background: dailyScore >= 75 ? '#2E7D52' : dailyScore >= 50 ? '#B45309' : '#1B3A6B', borderRadius: '4px', transition: 'width 0.5s ease' }} />
-            </div>
-            <div style={{ fontSize: '11px', color: '#4A6080', fontWeight: 600 }}>{dailyScore}/100 puan</div>
-          </div>
-        )}
-
-        <nav style={{ flex: 1, padding: '8px', overflowY: 'auto' }}>
-          {TABS.map(tab => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', borderRadius: '10px', marginBottom: '3px', fontSize: '13px', fontWeight: activeTab === tab.id ? 700 : 500, color: activeTab === tab.id ? '#fff' : '#4A6080', background: activeTab === tab.id ? '#1B3A6B' : 'transparent', border: 'none', cursor: 'pointer' }}>
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-
-        <div style={{ padding: '8px', borderTop: '1px solid #D5DFF0' }}>
-          <button onClick={signOut} style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', color: '#C0392B', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
-            Çıkış Yap
+          )}
+          <button onClick={signOut} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '8px', padding: '6px 10px', color: '#fff', fontSize: '12px', cursor: 'pointer' }}>
+            Çıkış
           </button>
         </div>
-      </aside>
+      </div>
 
-      <main style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+      {/* Günlük Skor Bar */}
+      {streak && (
+        <div style={{ background: '#fff', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid #F0F4F9' }}>
+          <div style={{ flex: 1, height: '6px', background: '#F0F4F9', borderRadius: '3px', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: dailyScore + '%', background: dailyScore >= 75 ? '#2E7D52' : dailyScore >= 50 ? '#B45309' : '#1B3A6B', borderRadius: '3px', transition: 'width 0.5s' }} />
+          </div>
+          <span style={{ fontSize: '11px', fontWeight: 700, color: '#1B3A6B', flexShrink: 0 }}>{dailyScore}/100 puan</span>
+          <span style={{ fontSize: '13px' }}>{fb.emoji}</span>
+        </div>
+      )}
+
+      {/* Alt Tab Bar (mobil navigasyon) */}
+      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid #E2EAF8', display: 'flex', zIndex: 100, paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        {TABS.slice(0, 5).map(tab => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ flex: 1, padding: '8px 4px 10px', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+            <span style={{ fontSize: '18px' }}>{tab.icon}</span>
+            <span style={{ fontSize: '9px', fontWeight: activeTab === tab.id ? 700 : 500, color: activeTab === tab.id ? '#1B3A6B' : '#9CA3AF' }}>
+              {tab.label.split(' ')[1]}
+            </span>
+            {activeTab === tab.id && <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#1B3A6B' }} />}
+          </button>
+        ))}
+        <button onClick={() => setActiveTab('swot')} style={{ flex: 1, padding: '8px 4px 10px', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+          <span style={{ fontSize: '18px' }}>🔍</span>
+          <span style={{ fontSize: '9px', fontWeight: activeTab === 'swot' ? 700 : 500, color: activeTab === 'swot' ? '#1B3A6B' : '#9CA3AF' }}>SWOT</span>
+          {activeTab === 'swot' && <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#1B3A6B' }} />}
+        </button>
+      </div>
+
+      {/* İçerik — alt tab bar için padding */}
+      <div style={{ padding: '16px 16px 80px' }}>
 
         {/* BUGÜN */}
         {activeTab === 'today' && (
-          <div style={{ maxWidth: '700px' }}>
-            <div style={{ background: '#1B3A6B', borderRadius: '16px', padding: '20px 24px', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <div style={{ fontSize: '20px', fontWeight: 800, color: '#fff', marginBottom: '4px' }}>Merhaba, {profile?.full_name?.split(' ')[0]}! 👋</div>
-                <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)' }}>{new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '36px', fontWeight: 800, color: '#fff' }}>{dailyProgress}%</div>
-                <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>Bugün</div>
+          <div>
+            {/* Karşılama Kartı */}
+            <div style={{ background: 'linear-gradient(135deg, #1B3A6B 0%, #2563EB 100%)', borderRadius: '16px', padding: '18px', marginBottom: '14px', color: '#fff' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <div style={{ fontSize: '18px', fontWeight: 800, marginBottom: '4px' }}>Merhaba, {profile?.full_name?.split(' ')[0]}! 👋</div>
+                  <div style={{ fontSize: '12px', opacity: 0.7 }}>{new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+                </div>
+                <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.15)', borderRadius: '12px', padding: '8px 14px' }}>
+                  <div style={{ fontSize: '28px', fontWeight: 800 }}>{dailyProgress}%</div>
+                  <div style={{ fontSize: '10px', opacity: 0.7 }}>Bugün</div>
+                </div>
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '10px', marginBottom: '16px' }}>
+            {/* Seri & Puan & Rozet */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '10px', marginBottom: '14px' }}>
               {[
                 { label: 'Seri', value: (streak?.current_streak ?? 0) + ' gün', icon: '🔥', color: '#B45309', bg: '#FDF4E7' },
-                { label: 'Toplam Puan', value: streak?.total_points ?? 0, icon: '💎', color: '#6B4FC8', bg: '#F0ECFB' },
+                { label: 'Puan', value: streak?.total_points ?? 0, icon: '💎', color: '#6B4FC8', bg: '#F0ECFB' },
                 { label: 'Rozet', value: badges.length, icon: '🏅', color: '#2E7D52', bg: '#EAF4EE' },
               ].map(m => (
-                <div key={m.label} style={{ background: m.bg, borderRadius: '12px', padding: '14px', textAlign: 'center', border: '1px solid rgba(0,0,0,0.05)' }}>
-                  <div style={{ fontSize: '24px', marginBottom: '4px' }}>{m.icon}</div>
-                  <div style={{ fontSize: '18px', fontWeight: 800, color: m.color }}>{m.value}</div>
-                  <div style={{ fontSize: '10.5px', color: '#7A8FA8' }}>{m.label}</div>
+                <div key={m.label} style={{ background: m.bg, borderRadius: '14px', padding: '14px 10px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '22px', marginBottom: '4px' }}>{m.icon}</div>
+                  <div style={{ fontSize: '16px', fontWeight: 800, color: m.color }}>{m.value}</div>
+                  <div style={{ fontSize: '10px', color: '#7A8FA8' }}>{m.label}</div>
                 </div>
               ))}
             </div>
 
+            {/* Feedback */}
             {streak && (
-              <div style={{ background: fb.bg, borderRadius: '12px', padding: '14px 18px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid rgba(0,0,0,0.05)' }}>
-                <span style={{ fontSize: '28px' }}>{fb.emoji}</span>
+              <div style={{ background: fb.bg, borderRadius: '12px', padding: '12px 14px', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '24px' }}>{fb.emoji}</span>
                 <div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: fb.color }}>{fb.msg}</div>
-                  <div style={{ fontSize: '12px', color: '#7A8FA8' }}>Günlük skor: {dailyScore}/100</div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: fb.color }}>{fb.msg}</div>
+                  <div style={{ fontSize: '11px', color: '#7A8FA8' }}>Günlük skor: {dailyScore}/100</div>
                 </div>
               </div>
             )}
 
-            <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid #D5DFF0', overflow: 'hidden', marginBottom: '16px' }}>
-              <div style={{ padding: '16px 20px', borderBottom: '1px solid #F0F4F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: '15px', fontWeight: 700, color: '#1B3A6B' }}>📋 Bugünün Görevleri</div>
-                <span style={{ fontSize: '12px', fontWeight: 600, padding: '4px 10px', borderRadius: '20px', background: completedTasks === totalTasks && totalTasks > 0 ? '#EAF4EE' : '#EEF3FB', color: completedTasks === totalTasks && totalTasks > 0 ? '#2E7D52' : '#1B3A6B' }}>
+            {/* Günlük Görevler */}
+            <div style={{ background: '#fff', borderRadius: '16px', overflow: 'hidden', marginBottom: '14px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
+              <div style={{ padding: '14px 16px', borderBottom: '1px solid #F0F4F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ fontSize: '14px', fontWeight: 700, color: '#1B3A6B' }}>📋 Bugünün Görevleri</div>
+                <span style={{ fontSize: '12px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px', background: completedTasks === totalTasks && totalTasks > 0 ? '#EAF4EE' : '#EEF3FB', color: completedTasks === totalTasks && totalTasks > 0 ? '#2E7D52' : '#1B3A6B' }}>
                   {completedTasks}/{totalTasks}
                 </span>
               </div>
               {dailyTasks.length === 0 ? (
-                <div style={{ padding: '40px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '36px', marginBottom: '12px' }}>🎉</div>
-                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#2E7D52', marginBottom: '6px' }}>Bugün için görev yok!</div>
-                  <div style={{ fontSize: '12px', color: '#7A8FA8' }}>Öğretmenin yakında görev atayacak.</div>
+                <div style={{ padding: '32px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '32px', marginBottom: '8px' }}>🎉</div>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#2E7D52' }}>Bugün için görev yok!</div>
+                  <div style={{ fontSize: '11px', color: '#7A8FA8', marginTop: '4px' }}>Öğretmenin yakında görev atayacak.</div>
                 </div>
               ) : dailyTasks.map((task, i) => {
                 const isDone = task.status === 'completed'
                 return (
-                  <div key={task.id} style={{ padding: '16px 20px', borderBottom: i < dailyTasks.length - 1 ? '1px solid #F0F4F9' : 'none', display: 'flex', alignItems: 'center', gap: '14px', background: isDone ? '#F8FFF8' : '#fff', opacity: isDone ? 0.7 : 1 }}>
-                    <button onClick={() => !isDone && completeTask(task.id)} style={{ width: '44px', height: '44px', borderRadius: '50%', background: isDone ? '#2E7D52' : '#EEF3FB', border: isDone ? 'none' : '2px solid #D5DFF0', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: isDone ? 'default' : 'pointer', flexShrink: 0, fontSize: '20px', transition: 'all 0.2s' }}>
-                      {isDone ? '✓' : task.subjects?.name?.[0] ?? '📖'}
+                  <div key={task.id} style={{ padding: '14px 16px', borderBottom: i < dailyTasks.length - 1 ? '1px solid #F0F4F9' : 'none', display: 'flex', alignItems: 'center', gap: '12px', background: isDone ? '#F8FFF8' : '#fff' }}>
+                    <button onClick={() => !isDone && completeTask(task.id)} style={{ width: '44px', height: '44px', borderRadius: '50%', background: isDone ? '#2E7D52' : '#EEF3FB', border: isDone ? 'none' : '2px solid #D5DFF0', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: isDone ? 'default' : 'pointer', flexShrink: 0, fontSize: '18px' }}>
+                      {isDone ? '✓' : '📖'}
                     </button>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '14px', fontWeight: 700, color: isDone ? '#7A8FA8' : '#1B3A6B', textDecoration: isDone ? 'line-through' : 'none', marginBottom: '3px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: isDone ? '#7A8FA8' : '#1B3A6B', textDecoration: isDone ? 'line-through' : 'none', marginBottom: '2px' }}>
                         {task.subjects?.name ?? 'Genel'}{task.topics?.name ? ' — ' + task.topics.name : ''}
                       </div>
-                      <div style={{ fontSize: '12px', color: '#7A8FA8' }}>{task.description ?? task.question_count + ' soru'} • {task.target_duration_minutes} dk</div>
+                      <div style={{ fontSize: '11px', color: '#7A8FA8' }}>{task.description ?? task.question_count + ' soru'} • {task.target_duration_minutes} dk</div>
                     </div>
                     {isDone ? (
-                      <div style={{ textAlign: 'center', flexShrink: 0 }}>
-                        <div style={{ fontSize: '18px', fontWeight: 800, color: '#2E7D52' }}>{task.score}</div>
-                        <div style={{ fontSize: '10px', color: '#7A8FA8' }}>puan</div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '16px', fontWeight: 800, color: '#2E7D52' }}>{task.score}</div>
+                        <div style={{ fontSize: '9px', color: '#7A8FA8' }}>puan</div>
                       </div>
                     ) : (
-                      <div onClick={() => completeTask(task.id)} style={{ padding: '8px 16px', borderRadius: '20px', background: '#1B3A6B', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+                      <button onClick={() => completeTask(task.id)} style={{ padding: '8px 14px', borderRadius: '20px', background: '#1B3A6B', color: '#fff', fontSize: '12px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
                         Yaptım!
-                      </div>
+                      </button>
                     )}
                   </div>
                 )
               })}
             </div>
 
+            {/* Bekleyen Ödevler */}
             {pendingHw > 0 && (
-              <div onClick={() => setActiveTab('homework')} style={{ background: '#FDF4E7', borderRadius: '12px', padding: '14px 18px', border: '1px solid #FED7AA', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', marginBottom: '14px' }}>
+              <div onClick={() => setActiveTab('homework')} style={{ background: '#FDF4E7', borderRadius: '12px', padding: '14px 16px', border: '1px solid #FED7AA', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', marginBottom: '14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <span style={{ fontSize: '22px' }}>📝</span>
                   <div>
-                    <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#B45309' }}>{pendingHw} bekleyen ödev var</div>
-                    <div style={{ fontSize: '11.5px', color: '#7A8FA8' }}>Görmek için tıkla</div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#B45309' }}>{pendingHw} bekleyen ödev var</div>
+                    <div style={{ fontSize: '11px', color: '#7A8FA8' }}>Görmek için tıkla</div>
                   </div>
                 </div>
                 <span style={{ fontSize: '18px', color: '#B45309' }}>→</span>
               </div>
             )}
 
+            {/* Rozetler */}
             {badges.length > 0 && (
-              <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid #D5DFF0', padding: '16px 20px' }}>
-                <div style={{ fontSize: '14px', fontWeight: 700, color: '#1B3A6B', marginBottom: '12px' }}>🏅 Rozetlerim</div>
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <div style={{ background: '#fff', borderRadius: '14px', padding: '14px 16px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B', marginBottom: '10px' }}>🏅 Rozetlerim</div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   {badges.map(b => (
-                    <div key={b.id} style={{ background: '#F8FAFF', borderRadius: '10px', padding: '10px 14px', textAlign: 'center', border: '1px solid #E2EAF8' }}>
-                      <div style={{ fontSize: '24px', marginBottom: '4px' }}>{b.badges?.icon}</div>
-                      <div style={{ fontSize: '11px', fontWeight: 600, color: '#1B3A6B' }}>{b.badges?.name}</div>
+                    <div key={b.id} style={{ background: '#F8FAFF', borderRadius: '10px', padding: '8px 12px', textAlign: 'center', border: '1px solid #E2EAF8' }}>
+                      <div style={{ fontSize: '22px', marginBottom: '2px' }}>{b.badges?.icon}</div>
+                      <div style={{ fontSize: '10px', fontWeight: 600, color: '#1B3A6B' }}>{b.badges?.name}</div>
                     </div>
                   ))}
                 </div>
@@ -301,41 +295,39 @@ export default function StudentPanelPage() {
 
         {/* PERFORMANS */}
         {activeTab === 'performance' && (
-          <div style={{ maxWidth: '700px' }}>
-            <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', marginBottom: '20px' }}>Konu Performansım</h1>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '10px', marginBottom: '20px' }}>
+          <div>
+            <div style={{ fontSize: '16px', fontWeight: 700, color: '#1B3A6B', marginBottom: '14px' }}>📊 Konu Performansım</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '8px', marginBottom: '14px' }}>
               {[
-                { label: 'Genel Başarı', value: '%' + overallRate, color: overallRate >= 70 ? '#2E7D52' : overallRate >= 50 ? '#B45309' : '#C0392B', bg: overallRate >= 70 ? '#EAF4EE' : overallRate >= 50 ? '#FDF4E7' : '#FEF2F2' },
-                { label: 'Güçlü Konu', value: strongTopics.length, color: '#2E7D52', bg: '#EAF4EE' },
-                { label: 'Zayıf Konu', value: weakTopics.length, color: '#C0392B', bg: '#FEF2F2' },
+                { label: 'Genel', value: '%' + overallRate, color: overallRate >= 70 ? '#2E7D52' : overallRate >= 50 ? '#B45309' : '#C0392B', bg: overallRate >= 70 ? '#EAF4EE' : overallRate >= 50 ? '#FDF4E7' : '#FEF2F2' },
+                { label: 'Güçlü', value: strongTopics.length, color: '#2E7D52', bg: '#EAF4EE' },
+                { label: 'Zayıf', value: weakTopics.length, color: '#C0392B', bg: '#FEF2F2' },
               ].map(m => (
-                <div key={m.label} style={{ background: m.bg, borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '28px', fontWeight: 800, color: m.color }}>{m.value}</div>
-                  <div style={{ fontSize: '11px', color: '#7A8FA8', marginTop: '4px' }}>{m.label}</div>
+                <div key={m.label} style={{ background: m.bg, borderRadius: '12px', padding: '14px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '22px', fontWeight: 800, color: m.color }}>{m.value}</div>
+                  <div style={{ fontSize: '10px', color: '#7A8FA8', marginTop: '3px' }}>{m.label}</div>
                 </div>
               ))}
             </div>
             {topicPerf.length === 0 ? (
-              <div style={{ background: '#F8FAFF', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '40px', textAlign: 'center', color: '#7A8FA8' }}>Henüz veri yok</div>
+              <div style={{ background: '#F8FAFF', borderRadius: '12px', padding: '32px', textAlign: 'center', color: '#7A8FA8' }}>Henüz veri yok</div>
             ) : (
-              <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {topicPerf.map(t => {
                   const color = t.accuracy_rate >= 70 ? '#2E7D52' : t.accuracy_rate >= 50 ? '#B45309' : '#C0392B'
                   const bg = t.accuracy_rate >= 70 ? '#EAF4EE' : t.accuracy_rate >= 50 ? '#FDF4E7' : '#FEF2F2'
                   return (
-                    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '10px', background: bg }}>
-                      <div style={{ width: '120px', flexShrink: 0 }}>
-                        <div style={{ fontSize: '12.5px', fontWeight: 700, color }}>{t.topics?.name ?? 'Genel'}</div>
-                        <div style={{ fontSize: '10.5px', color: '#7A8FA8' }}>{t.subjects?.name}</div>
+                    <div key={t.id} style={{ background: '#fff', borderRadius: '12px', padding: '12px 14px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                        <div>
+                          <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B' }}>{t.topics?.name ?? 'Genel'}</div>
+                          <div style={{ fontSize: '11px', color: '#7A8FA8' }}>{t.subjects?.name}</div>
+                        </div>
+                        <span style={{ fontSize: '18px', fontWeight: 800, color }}> %{Math.round(t.accuracy_rate)}</span>
                       </div>
-                      <div style={{ flex: 1, height: '8px', background: 'rgba(0,0,0,0.08)', borderRadius: '4px', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: Math.min(t.accuracy_rate, 100) + '%', background: color, borderRadius: '4px' }} />
+                      <div style={{ height: '6px', background: '#F0F4F9', borderRadius: '3px', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: Math.min(t.accuracy_rate, 100) + '%', background: color, borderRadius: '3px' }} />
                       </div>
-                      <span style={{ fontSize: '15px', fontWeight: 800, color, width: '44px', textAlign: 'right', flexShrink: 0 }}>
-                        %{Math.round(t.accuracy_rate)}
-                        {t.trend_direction === 'up' && <span style={{ fontSize: '10px' }}> ↑</span>}
-                        {t.trend_direction === 'down' && <span style={{ fontSize: '10px' }}> ↓</span>}
-                      </span>
                     </div>
                   )
                 })}
@@ -346,76 +338,68 @@ export default function StudentPanelPage() {
 
         {/* ÖDEVLERİM */}
         {activeTab === 'homework' && (
-          <div style={{ maxWidth: '700px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', margin: 0 }}>Ödevlerim</h1>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <span style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '20px', background: '#FDF4E7', color: '#B45309', fontWeight: 600 }}>Bekleyen: {pendingHw}</span>
-                <span style={{ fontSize: '12px', padding: '4px 12px', borderRadius: '20px', background: '#EAF4EE', color: '#2E7D52', fontWeight: 600 }}>Tamam: {homework.filter(h => h.status === 'completed').length}</span>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+              <div style={{ fontSize: '16px', fontWeight: 700, color: '#1B3A6B' }}>📚 Ödevlerim</div>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: '#FDF4E7', color: '#B45309', fontWeight: 600 }}>{pendingHw} bekliyor</span>
+                <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: '#EAF4EE', color: '#2E7D52', fontWeight: 600 }}>{homework.filter(h => h.status === 'completed').length} tamam</span>
               </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {homework.length === 0 ? (
-                <div style={{ background: '#F8FAFF', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '40px', textAlign: 'center', color: '#7A8FA8' }}>Henüz ödev yok</div>
-              ) : homework.map(h => {
-                const isDone = h.status === 'completed'
-                const isLate = !isDone && h.deadline && new Date(h.deadline) < new Date()
-                return (
-                  <a key={h.id} href={`/homework/${h.id}`} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '16px 20px', borderRadius: '14px', textDecoration: 'none', background: '#fff', border: '1px solid', borderColor: isDone ? '#D1FAE5' : isLate ? '#FECACA' : '#D5DFF0', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-                    <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: isDone ? '#EAF4EE' : isLate ? '#FEF2F2' : '#EEF3FB', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', flexShrink: 0 }}>
-                      {isDone ? '✅' : isLate ? '⏰' : '📝'}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#1B3A6B', textDecoration: isDone ? 'line-through' : 'none' }}>{h.tests?.name}</div>
-                      <div style={{ fontSize: '12px', color: '#7A8FA8', marginTop: '2px' }}>{h.tests?.chapters?.books?.name}</div>
-                    </div>
-                    <span style={{ fontSize: '12px', fontWeight: 700, padding: '5px 12px', borderRadius: '20px', background: isDone ? '#EAF4EE' : isLate ? '#FEF2F2' : '#FDF4E7', color: isDone ? '#2E7D52' : isLate ? '#C0392B' : '#B45309', flexShrink: 0 }}>
-                      {isDone ? 'Tamam' : isLate ? 'Gecikti!' : 'Yap'}
-                    </span>
-                  </a>
-                )
-              })}
-            </div>
+            {homework.length === 0 ? (
+              <div style={{ background: '#F8FAFF', borderRadius: '12px', padding: '32px', textAlign: 'center', color: '#7A8FA8' }}>Henüz ödev yok</div>
+            ) : homework.map(h => {
+              const isDone = h.status === 'completed'
+              const isLate = !isDone && h.deadline && new Date(h.deadline) < new Date()
+              return (
+                <a key={h.id} href={`/homework/${h.id}`} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px', marginBottom: '8px', borderRadius: '14px', textDecoration: 'none', background: '#fff', border: '1px solid', borderColor: isDone ? '#D1FAE5' : isLate ? '#FECACA' : '#E2EAF8', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+                  <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: isDone ? '#EAF4EE' : isLate ? '#FEF2F2' : '#EEF3FB', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', flexShrink: 0 }}>
+                    {isDone ? '✅' : isLate ? '⏰' : '📝'}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B', marginBottom: '2px', textDecoration: isDone ? 'line-through' : 'none' }}>{h.tests?.name}</div>
+                    <div style={{ fontSize: '11px', color: '#7A8FA8' }}>{h.tests?.chapters?.books?.name}</div>
+                  </div>
+                  <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '20px', background: isDone ? '#EAF4EE' : isLate ? '#FEF2F2' : '#FDF4E7', color: isDone ? '#2E7D52' : isLate ? '#C0392B' : '#B45309' }}>
+                    {isDone ? 'Tamam' : isLate ? 'Gecikti!' : 'Yap →'}
+                  </span>
+                </a>
+              )
+            })}
           </div>
         )}
 
-        {/* ÇALIŞMA PLANI */}
+        {/* PLAN */}
         {activeTab === 'plan' && (
-          <div style={{ maxWidth: '700px' }}>
-            <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', marginBottom: '20px' }}>Haftalık Planım</h1>
+          <div>
+            <div style={{ fontSize: '16px', fontWeight: 700, color: '#1B3A6B', marginBottom: '14px' }}>🗓 Haftalık Planım</div>
             {!studyPlan ? (
-              <div style={{ background: '#FDF4E7', border: '1px solid #FED7AA', borderRadius: '14px', padding: '40px', textAlign: 'center' }}>
-                <div style={{ fontSize: '36px', marginBottom: '12px' }}>📅</div>
-                <div style={{ fontSize: '14px', fontWeight: 700, color: '#B45309' }}>Henüz çalışma planın yok</div>
-                <div style={{ fontSize: '12px', color: '#7A8FA8', marginTop: '6px' }}>Öğretmeninden plan oluşturmasını iste</div>
+              <div style={{ background: '#FDF4E7', border: '1px solid #FED7AA', borderRadius: '14px', padding: '32px', textAlign: 'center' }}>
+                <div style={{ fontSize: '32px', marginBottom: '10px' }}>📅</div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#B45309' }}>Henüz çalışma planın yok</div>
+                <div style={{ fontSize: '11px', color: '#7A8FA8', marginTop: '4px' }}>Öğretmeninden plan oluşturmasını iste</div>
               </div>
             ) : (
-              <div style={{ background: '#fff', borderRadius: '14px', border: '1px solid #D5DFF0', overflow: 'hidden' }}>
-                <div style={{ padding: '14px 18px', borderBottom: '1px solid #D5DFF0', fontSize: '13px', fontWeight: 700, color: '#1B3A6B' }}>
+              <div>
+                <div style={{ background: '#EEF3FB', borderRadius: '10px', padding: '10px 14px', marginBottom: '12px', fontSize: '12px', color: '#1B3A6B', fontWeight: 600 }}>
                   {new Date(studyPlan.week_start_date).toLocaleDateString('tr-TR')} — {new Date(studyPlan.week_end_date).toLocaleDateString('tr-TR')}
                 </div>
                 {[1,2,3,4,5,6,7].map(day => {
                   const dayItems = studyPlan.study_plan_items?.filter((i: any) => i.day_of_week === day) ?? []
                   if (dayItems.length === 0) return null
                   return (
-                    <div key={day} style={{ borderBottom: '1px solid #F0F4F9' }}>
-                      <div style={{ padding: '10px 18px', background: '#F8FAFF', fontSize: '12px', fontWeight: 700, color: '#1B3A6B', borderBottom: '1px solid #F0F4F9' }}>
-                        {DAYS[day]}
-                        <span style={{ marginLeft: '8px', fontSize: '11px', color: '#7A8FA8', fontWeight: 400 }}>
-                          {dayItems.reduce((s: number, i: any) => s + i.target_duration_minutes, 0)} dk
-                        </span>
+                    <div key={day} style={{ background: '#fff', borderRadius: '12px', marginBottom: '10px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+                      <div style={{ padding: '10px 14px', background: '#F8FAFF', borderBottom: '1px solid #F0F4F9', fontSize: '12px', fontWeight: 700, color: '#1B3A6B', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>{DAYS[day]}</span>
+                        <span style={{ color: '#7A8FA8', fontWeight: 400 }}>{dayItems.reduce((s: number, i: any) => s + i.target_duration_minutes, 0)} dk</span>
                       </div>
                       {dayItems.map((item: any, ti: number) => (
-                        <div key={item.id} style={{ padding: '12px 18px', borderBottom: ti < dayItems.length - 1 ? '1px solid #F0F4F9' : 'none', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: item.task_type === 'weak_area' ? '#C0392B' : item.task_type === 'review' ? '#B45309' : '#1B3A6B', flexShrink: 0 }} />
+                        <div key={item.id} style={{ padding: '10px 14px', borderBottom: ti < dayItems.length - 1 ? '1px solid #F0F4F9' : 'none', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: item.task_type === 'weak_area' ? '#C0392B' : '#1B3A6B', flexShrink: 0 }} />
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#1B3A6B' }}>{item.subjects?.name} — {item.topics?.name}</div>
-                            <div style={{ fontSize: '12px', color: '#4A6080' }}>{item.task_description}</div>
+                            <div style={{ fontSize: '12.5px', fontWeight: 600, color: '#1B3A6B' }}>{item.subjects?.name} — {item.topics?.name}</div>
                           </div>
-                          <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                            <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '8px', background: '#F0F4F9', color: '#4A6080' }}>{item.question_count}s</span>
-                            <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '8px', background: '#F0F4F9', color: '#4A6080' }}>{item.target_duration_minutes}dk</span>
-                          </div>
+                          <span style={{ fontSize: '10px', padding: '2px 7px', borderRadius: '8px', background: '#F0F4F9', color: '#4A6080' }}>{item.question_count}s</span>
                         </div>
                       ))}
                     </div>
@@ -428,34 +412,34 @@ export default function StudentPanelPage() {
 
         {/* HEDEFLER */}
         {activeTab === 'goals' && (
-          <div style={{ maxWidth: '700px' }}>
-            <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', marginBottom: '20px' }}>Hedeflerim 🎯</h1>
+          <div>
+            <div style={{ fontSize: '16px', fontWeight: 700, color: '#1B3A6B', marginBottom: '14px' }}>🎯 Hedeflerim</div>
             {goals.length === 0 ? (
-              <div style={{ background: '#F8FAFF', border: '1px solid #D5DFF0', borderRadius: '14px', padding: '40px', textAlign: 'center' }}>
-                <div style={{ fontSize: '36px', marginBottom: '12px' }}>🎯</div>
-                <div style={{ fontSize: '14px', fontWeight: 700, color: '#1B3A6B', marginBottom: '6px' }}>Henüz hedef belirlenmedi</div>
-                <div style={{ fontSize: '12px', color: '#7A8FA8' }}>Öğretmenin senin için hedef belirleyecek</div>
+              <div style={{ background: '#F8FAFF', border: '1px solid #D5DFF0', borderRadius: '14px', padding: '32px', textAlign: 'center' }}>
+                <div style={{ fontSize: '32px', marginBottom: '10px' }}>🎯</div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B' }}>Henüz hedef belirlenmedi</div>
               </div>
             ) : goals.map(g => {
               const progress = g.target_score > 0 ? Math.min(Math.round((g.current_score / g.target_score) * 100), 100) : 0
+              const pColor = progress >= 80 ? '#2E7D52' : progress >= 50 ? '#B45309' : '#1B3A6B'
               return (
-                <div key={g.id} style={{ background: '#fff', borderRadius: '14px', border: '1px solid #D5DFF0', padding: '20px', marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                <div key={g.id} style={{ background: '#fff', borderRadius: '14px', padding: '18px', marginBottom: '10px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
                     <div>
-                      <div style={{ fontSize: '16px', fontWeight: 800, color: '#1B3A6B' }}>{g.target_exam}</div>
-                      <div style={{ fontSize: '12px', color: '#7A8FA8' }}>Hedef: {g.target_date ? new Date(g.target_date).toLocaleDateString('tr-TR') : '—'}</div>
+                      <div style={{ fontSize: '18px', fontWeight: 800, color: '#1B3A6B' }}>{g.target_exam}</div>
+                      <div style={{ fontSize: '11px', color: '#7A8FA8', marginTop: '2px' }}>{g.target_date ? new Date(g.target_date).toLocaleDateString('tr-TR') : '—'}</div>
                     </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '28px', fontWeight: 800, color: '#1B3A6B' }}>{g.target_score}</div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '24px', fontWeight: 800, color: '#1B3A6B' }}>{g.target_score}</div>
                       <div style={{ fontSize: '10px', color: '#7A8FA8' }}>hedef puan</div>
                     </div>
                   </div>
                   <div style={{ height: '10px', background: '#F0F4F9', borderRadius: '5px', overflow: 'hidden', marginBottom: '8px' }}>
-                    <div style={{ height: '100%', width: progress + '%', background: progress >= 80 ? '#2E7D52' : progress >= 50 ? '#B45309' : '#1B3A6B', borderRadius: '5px', transition: 'width 0.5s ease' }} />
+                    <div style={{ height: '100%', width: progress + '%', background: pColor, borderRadius: '5px', transition: 'width 0.5s' }} />
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#7A8FA8' }}>
-                    <span>Mevcut: {g.current_score}</span>
-                    <span>%{progress} tamamlandı</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#7A8FA8' }}>
+                    <span>Mevcut: <strong style={{ color: '#1B3A6B' }}>{g.current_score}</strong></span>
+                    <span style={{ fontWeight: 700, color: pColor }}>%{progress} tamamlandı</span>
                   </div>
                 </div>
               )
@@ -465,87 +449,49 @@ export default function StudentPanelPage() {
 
         {/* SWOT */}
         {activeTab === 'swot' && (
-          <div style={{ maxWidth: '700px' }}>
-            <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', marginBottom: '20px' }}>Akademik SWOT Analizim 🔍</h1>
+          <div>
+            <div style={{ fontSize: '16px', fontWeight: 700, color: '#1B3A6B', marginBottom: '14px' }}>🔍 SWOT Analizim</div>
             {topicPerf.length === 0 ? (
-              <div style={{ background: '#FDF4E7', border: '1px solid #FED7AA', borderRadius: '14px', padding: '40px', textAlign: 'center' }}>
-                <div style={{ fontSize: '36px', marginBottom: '12px' }}>📊</div>
-                <div style={{ fontSize: '14px', fontWeight: 700, color: '#B45309' }}>Henüz analiz için yeterli veri yok</div>
-                <div style={{ fontSize: '12px', color: '#7A8FA8', marginTop: '6px' }}>Ödevlerini tamamla ve öğretmenin soru girişi yaptıkça analiz oluşacak</div>
+              <div style={{ background: '#FDF4E7', border: '1px solid #FED7AA', borderRadius: '14px', padding: '32px', textAlign: 'center' }}>
+                <div style={{ fontSize: '32px', marginBottom: '10px' }}>📊</div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#B45309' }}>Yeterli veri yok</div>
               </div>
             ) : (
-              <div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '10px', marginBottom: '16px' }}>
-                  {[
-                    { label: 'Genel Başarı', value: '%' + overallRate, color: overallRate >= 70 ? '#2E7D52' : overallRate >= 50 ? '#B45309' : '#C0392B', bg: overallRate >= 70 ? '#EAF4EE' : overallRate >= 50 ? '#FDF4E7' : '#FEF2F2' },
-                    { label: 'Güçlü Konu', value: strongTopics.length, color: '#2E7D52', bg: '#EAF4EE' },
-                    { label: 'Gelişim Alanı', value: weakTopics.length, color: '#C0392B', bg: '#FEF2F2' },
-                  ].map(m => (
-                    <div key={m.label} style={{ background: m.bg, borderRadius: '12px', padding: '14px', textAlign: 'center' }}>
-                      <div style={{ fontSize: '26px', fontWeight: 800, color: m.color }}>{m.value}</div>
-                      <div style={{ fontSize: '11px', color: '#7A8FA8', marginTop: '4px' }}>{m.label}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {[
+                  { title: '💪 Güçlü Yönlerim', items: strongTopics, color: '#2E7D52', bg: '#EAF4EE', border: '#D1FAE5', empty: 'Henüz güçlü konu yok' },
+                  { title: '📈 Gelişim Alanlarım', items: weakTopics, color: '#C0392B', bg: '#FEF2F2', border: '#FEE2E2', empty: 'Kritik zayıflık yok!' },
+                  { title: '🎯 Fırsatlarım', items: midTopics, color: '#B45309', bg: '#FDF4E7', border: '#FEF3C7', empty: 'Orta seviye konu yok' },
+                ].map(box => (
+                  <div key={box.title} style={{ background: box.bg, border: '1px solid ' + box.border, borderRadius: '14px', padding: '14px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: box.color, marginBottom: '10px' }}>{box.title}</div>
+                    {box.items.length === 0 ? (
+                      <div style={{ fontSize: '12px', color: '#7A8FA8' }}>{box.empty}</div>
+                    ) : box.items.slice(0, 4).map(t => (
+                      <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid rgba(0,0,0,0.05)', fontSize: '12px' }}>
+                        <span style={{ color: '#374151' }}>{t.subjects?.name} — {t.topics?.name ?? 'Genel'}</span>
+                        <strong style={{ color: box.color }}>%{Math.round(t.accuracy_rate)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+                <div style={{ background: '#EEF3FB', border: '1px solid #BFDBFE', borderRadius: '14px', padding: '14px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B', marginBottom: '6px' }}>⚠️ Dikkat Etmem Gerekenler</div>
+                  {riskScore >= 45 ? (
+                    <div style={{ fontSize: '12px', color: '#1B3A6B', lineHeight: 1.6 }}>
+                      Risk skorum: <strong style={{ color: riskScore >= 70 ? '#C0392B' : '#B45309' }}>{Math.round(riskScore)}/100</strong>
+                      <br />• Düzenli çalışma alışkanlığı kazan
+                      <br />• Öğretmeninden destek iste
                     </div>
-                  ))}
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div style={{ background: '#EAF4EE', border: '1px solid #D1FAE5', borderRadius: '14px', padding: '16px' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 800, color: '#2E7D52', marginBottom: '10px' }}>💪 Güçlü Yönlerim</div>
-                    {strongTopics.length === 0 ? (
-                      <div style={{ fontSize: '12px', color: '#7A8FA8' }}>Henüz güçlü konu belirlenmedi</div>
-                    ) : strongTopics.slice(0, 4).map(t => (
-                      <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid rgba(0,0,0,0.05)', fontSize: '12.5px', color: '#374151' }}>
-                        <span>{t.subjects?.name} — {t.topics?.name ?? 'Genel'}</span>
-                        <strong style={{ color: '#2E7D52' }}>%{Math.round(t.accuracy_rate)}</strong>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div style={{ background: '#FEF2F2', border: '1px solid #FEE2E2', borderRadius: '14px', padding: '16px' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 800, color: '#C0392B', marginBottom: '10px' }}>📈 Gelişim Alanlarım</div>
-                    {weakTopics.length === 0 ? (
-                      <div style={{ fontSize: '12px', color: '#2E7D52', fontWeight: 600 }}>Harika! Kritik zayıflık yok.</div>
-                    ) : weakTopics.slice(0, 4).map(t => (
-                      <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid rgba(0,0,0,0.05)', fontSize: '12.5px', color: '#374151' }}>
-                        <span>{t.subjects?.name} — {t.topics?.name ?? 'Genel'}</span>
-                        <strong style={{ color: '#C0392B' }}>%{Math.round(t.accuracy_rate)}</strong>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div style={{ background: '#FDF4E7', border: '1px solid #FEF3C7', borderRadius: '14px', padding: '16px' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 800, color: '#B45309', marginBottom: '10px' }}>🎯 Fırsatlarım</div>
-                    {midTopics.length === 0 ? (
-                      <div style={{ fontSize: '12px', color: '#7A8FA8' }}>Orta seviye konu yok</div>
-                    ) : midTopics.slice(0, 4).map(t => (
-                      <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid rgba(0,0,0,0.05)', fontSize: '12.5px', color: '#374151' }}>
-                        <span>{t.subjects?.name} — {t.topics?.name ?? 'Genel'}</span>
-                        <strong style={{ color: '#B45309' }}>%{Math.round(t.accuracy_rate)}</strong>
-                      </div>
-                    ))}
-                    <div style={{ fontSize: '11px', color: '#B45309', marginTop: '8px', fontStyle: 'italic' }}>Bu konulara odaklan — hızlı gelişim!</div>
-                  </div>
-
-                  <div style={{ background: '#EEF3FB', border: '1px solid #BFDBFE', borderRadius: '14px', padding: '16px' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 800, color: '#1B3A6B', marginBottom: '10px' }}>⚠️ Dikkat Etmem Gerekenler</div>
-                    {riskScore >= 45 ? (
-                      <div style={{ fontSize: '12.5px', color: '#1B3A6B', lineHeight: 1.6 }}>
-                        <div style={{ marginBottom: '6px' }}>Risk skorum: <strong style={{ color: riskScore >= 70 ? '#C0392B' : '#B45309' }}>{Math.round(riskScore)}/100</strong></div>
-                        {weakTopics.length > 0 && <div>• {weakTopics[0].subjects?.name} — {weakTopics[0].topics?.name ?? 'Genel'} konusuna odaklan</div>}
-                        <div>• Düzenli çalışma alışkanlığı kazan</div>
-                        <div>• Öğretmeninden destek iste</div>
-                      </div>
-                    ) : (
-                      <div style={{ fontSize: '12.5px', color: '#2E7D52', fontWeight: 600 }}>Harika gidiyorsun! Risk seviyesi düşük. Böyle devam et!</div>
-                    )}
-                  </div>
+                  ) : (
+                    <div style={{ fontSize: '12px', color: '#2E7D52', fontWeight: 600 }}>Harika gidiyorsun! Risk düşük. Böyle devam et!</div>
+                  )}
                 </div>
               </div>
             )}
           </div>
         )}
-
-      </main>
+      </div>
     </div>
   )
 }
