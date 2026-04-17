@@ -14,6 +14,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     { href: '/superadmin/billing', label: 'Plan Yonetimi' },
     { href: '/superadmin/backup', label: 'Yedekleme' },
     { href: '/superadmin/kvkk', label: 'KVKK & Guvenlik' },
+    { href: '/superadmin/modules', label: 'Modul Yonetimi' },
   ]
 
   return (
