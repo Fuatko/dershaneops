@@ -15,10 +15,23 @@ export default function StudentsPage() {
   async function load() {
     const { data } = await supabase
       .from('profiles')
-      .select('*, classrooms(name)')
+      .select('*')
       .eq('role', 'student')
       .order('grade_level', { ascending: true })
-    setStudents(data ?? [])
+
+    const { data: classroomData } = await supabase
+      .from('classrooms')
+      .select('id, name')
+
+    const classroomMap: Record<string, string> = {}
+    for (const c of classroomData ?? []) classroomMap[c.id] = c.name
+
+    const studentsWithClass = (data ?? []).map(s => ({
+      ...s,
+      classroom_name: s.classroom_id ? (classroomMap[s.classroom_id] ?? null) : null,
+    }))
+
+    setStudents(studentsWithClass)
     setLoading(false)
   }
 
@@ -92,9 +105,9 @@ export default function StudentsPage() {
                           {s.grade_level}. Sınıf
                         </span>
                       ) : <span style={{ color: '#D5DFF0' }}>—</span>}
-                      {(s.classrooms as any)?.name && (
+                      {s.classroom_name && (
                         <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: '#F0F4F9', color: '#4A6080', fontWeight: 600 }}>
-                          {(s.classrooms as any).name}
+                          {s.classroom_name}
                         </span>
                       )}
                     </div>
