@@ -48,23 +48,28 @@ export default function TeacherPanelPage() {
     const { data: p } = await supabase.from('profiles').select('*').eq('user_id', user.id).single()
     if (!p) { setLoading(false); return }
     setProfile(p)
+
     const { data: l } = await supabase.from('lessons').select('*, profiles!lessons_student_id_fkey(full_name)').eq('teacher_id', p.id).order('scheduled_at', { ascending: false })
-    const { data: s } = await supabase.from('profiles').select('id, full_name, grade_level, classrooms(name)').eq('role', 'student').order('grade_level', { ascending: true })
     const { data: sub } = await supabase.from('subjects').select('*').order('name')
     const { data: ra } = await supabase.from('student_question_attempts').select('*, profiles!student_question_attempts_student_id_fkey(full_name), topics(name), subjects(name)').eq('teacher_id', p.id).order('created_at', { ascending: false }).limit(15)
     const { data: bks } = await supabase.from('books').select('id, name, subject, color').order('name')
-    const studentIds = (s ?? []).map((x: any) => x.id)
+
+    // Öğrencileri classroom bilgisiyle çek
+    const { data: s } = await supabase.from('profiles').select('id, full_name, grade_level, classroom_id').eq('role', 'student').order('grade_level', { ascending: true })
+    const { data: classroomData } = await supabase.from('classrooms').select('id, name')
+    const classroomMap: Record<string, string> = {}
+    for (const c of classroomData ?? []) classroomMap[c.id] = c.name
+    const studentsData = (s ?? []).map(st => ({ ...st, classroom_name: st.classroom_id ? (classroomMap[st.classroom_id] ?? null) : null }))
+
+    const studentIds = studentsData.map((x: any) => x.id)
     let hw: any[] = []
     if (studentIds.length > 0) {
-      const { data: hwData } = await supabase
-        .from('homework_assignments')
-        .select('*, profiles!homework_assignments_student_id_fkey(full_name), tests(name, chapters(name, books(name)))')
-        .in('student_id', studentIds)
-        .order('created_at', { ascending: false })
+      const { data: hwData } = await supabase.from('homework_assignments').select('*, profiles!homework_assignments_student_id_fkey(full_name), tests(name, chapters(name, books(name)))').in('student_id', studentIds).order('created_at', { ascending: false })
       hw = hwData ?? []
     }
+
     setLessons(l ?? [])
-    setStudents(s ?? [])
+    setStudents(studentsData)
     setSubjects(sub ?? [])
     setRecentAttempts(ra ?? [])
     setBooks(bks ?? [])
@@ -91,11 +96,8 @@ export default function TeacherPanelPage() {
   function toggleAssignChapter(chapter: any) {
     const testIds = chapter.tests?.map((t: any) => t.id) ?? []
     const allSelected = testIds.every((id: string) => selectedTests.includes(id))
-    if (allSelected) {
-      setSelectedTests(prev => prev.filter(id => !testIds.includes(id)))
-    } else {
-      setSelectedTests(prev => [...new Set([...prev, ...testIds])])
-    }
+    if (allSelected) setSelectedTests(prev => prev.filter(id => !testIds.includes(id)))
+    else setSelectedTests(prev => [...new Set([...prev, ...testIds])])
   }
 
   async function handleAssign() {
@@ -103,10 +105,8 @@ export default function TeacherPanelPage() {
     setAssigning(true)
     setAssignSuccess(false)
     const inserts = selectedTests.map(testId => ({
-      student_id: selectedAssignStudent,
-      test_id: testId,
-      deadline: assignDeadline || null,
-      status: 'pending',
+      student_id: selectedAssignStudent, test_id: testId,
+      deadline: assignDeadline || null, status: 'pending',
       tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
     }))
     const { error } = await supabase.from('homework_assignments').insert(inserts)
@@ -127,18 +127,12 @@ export default function TeacherPanelPage() {
     const total = form.correct_count + form.wrong_count + form.blank_count
     await supabase.from('student_question_attempts').insert({
       tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
-      student_id: form.student_id,
-      teacher_id: profile.id,
-      subject_id: form.subject_id,
-      topic_id: form.topic_id || null,
-      attempt_date: form.attempt_date,
-      total_questions: total,
-      correct_count: form.correct_count,
-      wrong_count: form.wrong_count,
-      blank_count: form.blank_count,
-      difficulty_level: form.difficulty_level,
-      source_type: 'manual',
-      notes: form.notes || null,
+      student_id: form.student_id, teacher_id: profile.id,
+      subject_id: form.subject_id, topic_id: form.topic_id || null,
+      attempt_date: form.attempt_date, total_questions: total,
+      correct_count: form.correct_count, wrong_count: form.wrong_count,
+      blank_count: form.blank_count, difficulty_level: form.difficulty_level,
+      source_type: 'manual', notes: form.notes || null,
     })
     const query = supabase.from('student_question_attempts').select('total_questions, correct_count, wrong_count, blank_count, attempt_date').eq('student_id', form.student_id).eq('subject_id', form.subject_id)
     const { data: attempts } = form.topic_id ? await query.eq('topic_id', form.topic_id) : await query
@@ -151,10 +145,9 @@ export default function TeacherPanelPage() {
       const mastery = Math.round((acc * 0.70 + Math.min(attempts.length, 10) * 3.0) * 100) / 100
       await supabase.from('student_topic_performance').upsert({
         tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
-        student_id: form.student_id,
-        subject_id: form.subject_id,
-        topic_id: form.topic_id || null,
-        total_questions: tQ, correct_count: tC, wrong_count: tW, blank_count: tB,
+        student_id: form.student_id, subject_id: form.subject_id,
+        topic_id: form.topic_id || null, total_questions: tQ,
+        correct_count: tC, wrong_count: tW, blank_count: tB,
         accuracy_rate: acc, mastery_score: mastery,
         last_attempt_date: attempts[0].attempt_date,
         attempt_count: attempts.length, trend_direction: 'stable',
@@ -179,12 +172,20 @@ export default function TeacherPanelPage() {
     window.location.href = '/login'
   }
 
+  function getLevelStyle(grade: number) {
+    if (grade <= 4) return { color: '#2E7D52', bg: '#EAF4EE' }
+    if (grade <= 8) return { color: '#1B3A6B', bg: '#EEF3FB' }
+    return { color: '#6B4FC8', bg: '#F0ECFB' }
+  }
+
   const today = new Date()
   const upcomingLessons = lessons.filter(l => new Date(l.scheduled_at) >= today && l.status === 'scheduled').slice(0, 5)
   const total = form.correct_count + form.wrong_count + form.blank_count
   const accuracy = total > 0 ? Math.round(form.correct_count / total * 100) : 0
+
   const inp: React.CSSProperties = { width: '100%', padding: '8px 10px', borderRadius: '7px', border: '1px solid #D5DFF0', fontSize: '12.5px', color: '#1B3A6B', outline: 'none', background: '#fff', boxSizing: 'border-box' }
   const lbl: React.CSSProperties = { display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#4A6080', marginBottom: '5px' }
+
   const TABS = [
     { id: 'dashboard', label: 'Ana Sayfa' },
     { id: 'questions', label: 'Soru Girişi' },
@@ -242,6 +243,7 @@ export default function TeacherPanelPage() {
 
       <main style={{ flex: 1, overflowY: 'auto', padding: '28px' }}>
 
+        {/* ANA SAYFA */}
         {activeTab === 'dashboard' && (
           <div style={{ maxWidth: '900px' }}>
             <div style={{ marginBottom: '24px' }}>
@@ -299,6 +301,7 @@ export default function TeacherPanelPage() {
           </div>
         )}
 
+        {/* SORU GİRİŞİ */}
         {activeTab === 'questions' && (
           <div style={{ maxWidth: '700px' }}>
             <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', marginBottom: '20px' }}>Soru Çözüm Girişi</h1>
@@ -309,10 +312,10 @@ export default function TeacherPanelPage() {
                   <select value={form.student_id} onChange={e => setForm(p => ({ ...p, student_id: e.target.value }))} style={inp} required>
                     <option value="">Öğrenci seçin...</option>
                     {students.map(s => (
-  <option key={s.id} value={s.id}>
-    {s.full_name}{s.grade_level ? ' — ' + s.grade_level + '. Sınıf' : ''}{(s.classrooms as any)?.name ? ' (' + (s.classrooms as any).name + ')' : ''}
-  </option>
-))}
+                      <option key={s.id} value={s.id}>
+                        {s.full_name}{s.grade_level ? ' — ' + s.grade_level + '. Sınıf' : ''}{s.classroom_name ? ' (' + s.classroom_name + ')' : ''}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
@@ -373,11 +376,7 @@ export default function TeacherPanelPage() {
                   <label style={lbl}>Not (opsiyonel)</label>
                   <input value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} placeholder="Gözlem veya not..." style={inp} />
                 </div>
-                {success && (
-                  <div style={{ background: '#EAF4EE', border: '1px solid #A7D9B8', borderRadius: '8px', padding: '10px 14px', marginBottom: '12px', fontSize: '12.5px', fontWeight: 600, color: '#2E7D52' }}>
-                    Kayıt başarıyla eklendi!
-                  </div>
-                )}
+                {success && <div style={{ background: '#EAF4EE', border: '1px solid #A7D9B8', borderRadius: '8px', padding: '10px 14px', marginBottom: '12px', fontSize: '12.5px', fontWeight: 600, color: '#2E7D52' }}>Kayıt başarıyla eklendi!</div>}
                 <button type="submit" disabled={saving || total === 0} style={{ width: '100%', padding: '12px', borderRadius: '9px', background: '#1B3A6B', color: '#fff', fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
                   {saving ? 'Kaydediliyor...' : 'Kaydet ve Skoru Güncelle'}
                 </button>
@@ -386,6 +385,7 @@ export default function TeacherPanelPage() {
           </div>
         )}
 
+        {/* ÖDEV ATA */}
         {activeTab === 'assign' && (
           <div style={{ maxWidth: '1000px' }}>
             <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', marginBottom: '20px' }}>Ödev Ata</h1>
@@ -439,7 +439,11 @@ export default function TeacherPanelPage() {
                     <label style={lbl}>Öğrenci *</label>
                     <select value={selectedAssignStudent} onChange={e => setSelectedAssignStudent(e.target.value)} style={{ width: '100%', padding: '8px 10px', borderRadius: '7px', border: '1px solid #D5DFF0', fontSize: '12.5px', color: '#1B3A6B', outline: 'none', background: '#fff' }}>
                       <option value="">Öğrenci seçin...</option>
-                      {students.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+                      {students.map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.full_name}{s.grade_level ? ' — ' + s.grade_level + '. Sınıf' : ''}{s.classroom_name ? ' (' + s.classroom_name + ')' : ''}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div style={{ marginBottom: '16px' }}>
@@ -449,11 +453,7 @@ export default function TeacherPanelPage() {
                   <div style={{ background: '#F0F4F9', borderRadius: '8px', padding: '10px', marginBottom: '12px', fontSize: '12px', color: '#4A6080' }}>
                     {selectedTests.length} test seçildi
                   </div>
-                  {assignSuccess && (
-                    <div style={{ background: '#EAF4EE', border: '1px solid #A7D9B8', borderRadius: '8px', padding: '9px 12px', marginBottom: '10px', fontSize: '12px', color: '#2E7D52', fontWeight: 600 }}>
-                      Ödev atandı!
-                    </div>
-                  )}
+                  {assignSuccess && <div style={{ background: '#EAF4EE', border: '1px solid #A7D9B8', borderRadius: '8px', padding: '9px 12px', marginBottom: '10px', fontSize: '12px', color: '#2E7D52', fontWeight: 600 }}>Ödev atandı!</div>}
                   <button onClick={handleAssign} disabled={assigning || selectedTests.length === 0 || !selectedAssignStudent} style={{ width: '100%', padding: '10px', borderRadius: '8px', background: selectedTests.length > 0 && selectedAssignStudent ? '#1B3A6B' : '#D5DFF0', color: '#fff', fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
                     {assigning ? 'Atanıyor...' : 'Ödev Ata'}
                   </button>
@@ -463,6 +463,7 @@ export default function TeacherPanelPage() {
           </div>
         )}
 
+        {/* ÖDEV TAKİBİ */}
         {activeTab === 'homework' && (
           <div style={{ maxWidth: '900px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -478,6 +479,8 @@ export default function TeacherPanelPage() {
               ) : homework.map((h, i) => {
                 const isDone = h.status === 'completed'
                 const isLate = !isDone && h.deadline && new Date(h.deadline) < new Date()
+                const student = students.find(s => s.id === h.student_id)
+                const lv = student?.grade_level ? getLevelStyle(student.grade_level) : null
                 return (
                   <div key={h.id} style={{ padding: '13px 18px', borderBottom: i < homework.length - 1 ? '1px solid #F0F4F9' : 'none', display: 'flex', alignItems: 'center', gap: '14px' }}>
                     <div style={{ width: '36px', height: '36px', borderRadius: '9px', background: isDone ? '#EAF4EE' : '#EEF3FB', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, color: isDone ? '#2E7D52' : '#1B3A6B', flexShrink: 0 }}>
@@ -485,9 +488,19 @@ export default function TeacherPanelPage() {
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: '13px', fontWeight: 600, color: '#1B3A6B', marginBottom: '2px' }}>{h.tests?.name}</div>
-                      <div style={{ fontSize: '11.5px', color: '#7A8FA8' }}>
-                        {h.profiles?.full_name} • {h.tests?.chapters?.books?.name}
-                        {h.deadline && ` • Son: ${new Date(h.deadline).toLocaleDateString('tr-TR')}`}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '11.5px', color: '#7A8FA8' }}>{h.profiles?.full_name}</span>
+                        {lv && student?.grade_level && (
+                          <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '5px', background: lv.bg, color: lv.color }}>
+                            {student.grade_level}. Sınıf
+                          </span>
+                        )}
+                        {student?.classroom_name && (
+                          <span style={{ fontSize: '10px', padding: '1px 5px', borderRadius: '5px', background: '#F0F4F9', color: '#4A6080', fontWeight: 600 }}>
+                            {student.classroom_name}
+                          </span>
+                        )}
+                        {h.deadline && <span style={{ fontSize: '11px', color: '#7A8FA8' }}>• Son: {new Date(h.deadline).toLocaleDateString('tr-TR')}</span>}
                       </div>
                     </div>
                     <span style={{ fontSize: '11.5px', fontWeight: 600, padding: '3px 10px', borderRadius: '20px', background: isDone ? '#EAF4EE' : isLate ? '#FEF2F2' : '#FDF4E7', color: isDone ? '#2E7D52' : isLate ? '#C0392B' : '#B45309' }}>
@@ -505,6 +518,7 @@ export default function TeacherPanelPage() {
           </div>
         )}
 
+        {/* ÖĞRENCİLERİM */}
         {activeTab === 'students' && (
           <div style={{ maxWidth: '900px' }}>
             <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', marginBottom: '20px' }}>Öğrencilerim</h1>
@@ -517,26 +531,27 @@ export default function TeacherPanelPage() {
                 {students.map(s => {
                   const sLessons = lessons.filter(l => l.student_id === s.id)
                   const sHw = homework.filter(h => h.student_id === s.id)
+                  const lv = s.grade_level ? getLevelStyle(s.grade_level) : null
                   return (
                     <div key={s.id} style={{ background: '#fff', borderRadius: '12px', border: '1px solid #D5DFF0', padding: '18px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
-                        <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#E2EAF8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700, color: '#1B3A6B', flexShrink: 0 }}>
+                        <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: lv ? lv.bg : '#E2EAF8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700, color: lv ? lv.color : '#1B3A6B', flexShrink: 0 }}>
                           {s.full_name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
                         </div>
                         <div>
-                        <div style={{ fontSize: '14px', fontWeight: 700, color: '#1B3A6B' }}>{s.full_name}</div>
-<div style={{ display: 'flex', gap: '5px', marginTop: '3px', flexWrap: 'wrap' }}>
-  {s.grade_level && (
-    <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '5px', background: s.grade_level <= 4 ? '#EAF4EE' : s.grade_level <= 8 ? '#EEF3FB' : '#F0ECFB', color: s.grade_level <= 4 ? '#2E7D52' : s.grade_level <= 8 ? '#1B3A6B' : '#6B4FC8' }}>
-      {s.grade_level}. Sınıf
-    </span>
-  )}
-  {(s.classrooms as any)?.name && (
-    <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '5px', background: '#F0F4F9', color: '#4A6080', fontWeight: 600 }}>
-      {(s.classrooms as any).name}
-    </span>
-  )}
-</div>
+                          <div style={{ fontSize: '14px', fontWeight: 700, color: '#1B3A6B', marginBottom: '3px' }}>{s.full_name}</div>
+                          <div style={{ display: 'flex', gap: '4px' }}>
+                            {lv && s.grade_level && (
+                              <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '5px', background: lv.bg, color: lv.color }}>
+                                {s.grade_level}. Sınıf
+                              </span>
+                            )}
+                            {s.classroom_name && (
+                              <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '5px', background: '#F0F4F9', color: '#4A6080', fontWeight: 600 }}>
+                                {s.classroom_name}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '8px' }}>
@@ -559,6 +574,7 @@ export default function TeacherPanelPage() {
           </div>
         )}
 
+        {/* DERSLERİM */}
         {activeTab === 'lessons' && (
           <div style={{ maxWidth: '900px' }}>
             <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1B3A6B', marginBottom: '20px' }}>Tüm Derslerim ({lessons.length})</h1>
@@ -572,11 +588,26 @@ export default function TeacherPanelPage() {
                   cancelled: { bg: '#FEF2F2', color: '#C0392B', label: 'İptal' },
                 }
                 const st = STATUS[l.status] ?? STATUS.scheduled
+                const student = students.find(s => s.id === l.student_id)
+                const lv = student?.grade_level ? getLevelStyle(student.grade_level) : null
                 return (
                   <div key={l.id} style={{ padding: '13px 18px', borderBottom: i < lessons.length - 1 ? '1px solid #F0F4F9' : 'none', display: 'flex', alignItems: 'center', gap: '14px' }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#1B3A6B', marginBottom: '2px' }}>{l.subject}</div>
-                      <div style={{ fontSize: '11.5px', color: '#7A8FA8' }}>{l.profiles?.full_name} — {new Date(l.scheduled_at).toLocaleDateString('tr-TR')}</div>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#1B3A6B', marginBottom: '3px' }}>{l.subject}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '11.5px', color: '#7A8FA8' }}>{l.profiles?.full_name}</span>
+                        {lv && student?.grade_level && (
+                          <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '5px', background: lv.bg, color: lv.color }}>
+                            {student.grade_level}. Sınıf
+                          </span>
+                        )}
+                        {student?.classroom_name && (
+                          <span style={{ fontSize: '10px', padding: '1px 5px', borderRadius: '5px', background: '#F0F4F9', color: '#4A6080', fontWeight: 600 }}>
+                            {student.classroom_name}
+                          </span>
+                        )}
+                        <span style={{ fontSize: '11.5px', color: '#7A8FA8' }}>— {new Date(l.scheduled_at).toLocaleDateString('tr-TR')}</span>
+                      </div>
                     </div>
                     <span style={{ fontSize: '11px', fontWeight: 600, padding: '3px 9px', borderRadius: '20px', background: st.bg, color: st.color }}>{st.label}</span>
                   </div>
