@@ -26,6 +26,7 @@ const navGroups = [
     { href: '/daily-tasks', label: 'Günlük Görevler' },
     { href: '/goals', label: 'Hedef Takibi' },
     { href: '/performance', label: 'Hakimiyet Haritası' },
+    { href: '/outcomes', label: 'Kazanım Yönetimi' },
     { href: '/risk', label: 'Risk Analizi' },
     { href: '/studyplan', label: 'Çalışma Planı' },
     { href: '/teacherdecision', label: 'Öğretmen Destek' },
