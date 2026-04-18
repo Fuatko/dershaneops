@@ -1,354 +1,366 @@
-import Link from 'next/link'
+'use client'
+
+import { useState } from 'react'
 
 export default function LandingPage() {
-  return (
-    <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif', background: '#fff', color: '#1B3A6B' }}>
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState('dershane')
 
-      {/* Navbar */}
-      <nav style={{ position: 'fixed', top: 0, left: 0, right: 0, background: 'rgba(255,255,255,0.98)', backdropFilter: 'blur(16px)', borderBottom: '1px solid #F0F0F0', padding: '0 80px', height: '68px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 100 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ width: '34px', height: '34px', borderRadius: '8px', background: '#1B3A6B', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <rect x="1" y="1" width="7" height="7" rx="1.5" fill="white"/>
-              <rect x="10" y="1" width="7" height="7" rx="1.5" fill="white" opacity=".45"/>
-              <rect x="1" y="10" width="7" height="7" rx="1.5" fill="white" opacity=".45"/>
-              <rect x="10" y="10" width="7" height="7" rx="1.5" fill="white"/>
-            </svg>
+  const features = [
+    { icon: '📅', title: 'Akıllı Planlama', desc: 'Ders programı, çakışma tespiti ve otomatik takvim yönetimi' },
+    { icon: '📊', title: 'Sınav & Ölçme', desc: 'Sınav oluşturma, net hesaplama ve kazanım bazlı analiz' },
+    { icon: '🤖', title: 'AI Akademik Rehber', desc: 'Yapay zeka destekli çalışma planı, risk analizi ve öneriler' },
+    { icon: '📈', title: 'Performans Analizi', desc: 'Konu hakimiyet haritası, SWOT analizi ve gelişim profili' },
+    { icon: '🧭', title: 'Rehberlik Modülü', desc: 'Risk paneli, devamsızlık takibi ve AI rehberlik raporları' },
+    { icon: '🎯', title: 'Öğrenci Motivasyon', desc: 'Görev sistemi, streak, rozet ve kutlama animasyonları' },
+    { icon: '📄', title: 'Akıllı Raporlama', desc: 'PDF veli raporları, Excel export ve kurum analizleri' },
+    { icon: '🏢', title: 'Kurum Zekası', desc: 'Öğretmen etkinliği, şube karşılaştırması ve trend analizi' },
+    { icon: '📱', title: 'Mobil Uygulama', desc: 'PWA desteği — iPhone ve Android\'e app olarak kurulabilir' },
+  ]
+
+  const packages = [
+    {
+      key: 'starter', name: 'Başlangıç', price: '2.500', period: 'ay',
+      desc: 'Küçük kurumlar için temel planlama',
+      color: '#7A8FA8', bg: '#F0F4F9', border: '#D5DFF0',
+      features: ['Ders programı yönetimi', 'Öğrenci & öğretmen takibi', 'Temel raporlama', '0–100 öğrenci'],
+      icon: '🥉'
+    },
+    {
+      key: 'growth', name: 'Gelişim', price: '5.500', period: 'ay',
+      desc: 'Analiz ve sınav modülleri dahil',
+      color: '#2E7D52', bg: '#EAF4EE', border: '#A7D9B8',
+      features: ['Sınav & ölçme modülü', 'Konu analizi & SWOT', 'PDF & Excel raporlar', 'MEB uyumlu kazanım', '0–100 öğrenci'],
+      icon: '🥈',
+      popular: true
+    },
+    {
+      key: 'premium', name: 'Akıllı Yönetim', price: '9.500', period: 'ay',
+      desc: 'AI + öğrenci app + tüm modüller',
+      color: '#6B4FC8', bg: '#F0ECFB', border: '#C4B5FD',
+      features: ['AI akademik rehber', 'Öğrenci motivasyon app', 'Rehberlik modülü', 'Tahmin & senaryo motoru', 'Veli & kurum raporları', '0–100 öğrenci'],
+      icon: '🥇'
+    },
+    {
+      key: 'enterprise', name: 'Kurumsal', price: '15.000+', period: 'ay',
+      desc: 'Büyük okul ve zincirler için',
+      color: '#B45309', bg: '#FDF4E7', border: '#FED7AA',
+      features: ['Tüm modüller dahil', 'Kurum zekası modülü', 'Çoklu şube yönetimi', 'Özel entegrasyonlar', 'Öncelikli destek', '500+ öğrenci'],
+      icon: '🏆'
+    },
+  ]
+
+  const testimonials = [
+    { name: 'Ahmet Y.', role: 'Dershane Sahibi, İstanbul', text: 'Öğrenci takibi artık çok daha kolay. AI önerileri gerçekten işe yarıyor.' },
+    { name: 'Fatma K.', role: 'Akademik Koordinatör, Ankara', text: 'Veli raporları PDF olarak hazırlanıyor, velilerden çok olumlu geri dönüş aldık.' },
+    { name: 'Murat T.', role: 'Öğretmen, İzmir', text: 'Soru girişi ve ödev takibi artık dakikalar alıyor. Mobil uygulama harika.' },
+  ]
+
+  const dershanePkg = ['Planlama', 'Öğrenci app', 'AI rehber', 'Sınav analizi']
+  const okulPkg = ['Kazanım analizi', 'Rehberlik', 'Raporlama', 'Sınav & ölçme']
+
+  return (
+    <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', background: '#fff', color: '#1B3A6B' }}>
+
+      {/* NAVBAR */}
+      <nav style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(10px)', borderBottom: '1px solid #E2EAF8', padding: '0 24px' }}>
+        <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '60px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#1B3A6B', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 800, color: '#fff' }}>D</div>
+            <span style={{ fontSize: '16px', fontWeight: 800, color: '#1B3A6B' }}>DershaneOPS</span>
           </div>
-          <span style={{ fontSize: '17px', fontWeight: 700, color: '#1B3A6B', letterSpacing: '-0.3px' }}>DershaneOPS</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '36px' }}>
-          <a href="#features" style={{ fontSize: '14px', color: '#64748B', textDecoration: 'none', fontWeight: 500 }}>Özellikler</a>
-          <a href="#target" style={{ fontSize: '14px', color: '#64748B', textDecoration: 'none', fontWeight: 500 }}>Kimler İçin</a>
-          <a href="#usage" style={{ fontSize: '14px', color: '#64748B', textDecoration: 'none', fontWeight: 500 }}>Başlangıç</a>
-          <a href="mailto:fuat@servispro.com.tr?subject=DershaneOPS Demo Talebi" style={{ padding: '9px 22px', borderRadius: '8px', background: 'transparent', color: '#1B3A6B', fontSize: '14px', fontWeight: 600, textDecoration: 'none', border: '1.5px solid #CBD5E1' }}>
-            Demo Talep Et
-          </a>
-          <Link href="/login" style={{ padding: '9px 22px', borderRadius: '8px', background: '#1B3A6B', color: '#fff', fontSize: '14px', fontWeight: 600, textDecoration: 'none' }}>
-            Giriş Yap
-          </Link>
+          <div style={{ display: 'none', gap: '28px' }} className="desktop-nav">
+            {['Özellikler', 'Fiyatlar', 'Paketler', 'İletişim'].map(item => (
+              <a key={item} href={'#' + item.toLowerCase()} style={{ fontSize: '14px', color: '#4A6080', textDecoration: 'none', fontWeight: 500 }}>{item}</a>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <a href="/login" style={{ padding: '7px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: '#1B3A6B', textDecoration: 'none', border: '1.5px solid #D5DFF0' }}>Giriş Yap</a>
+            <a href="/login" style={{ padding: '7px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 700, color: '#fff', textDecoration: 'none', background: '#1B3A6B' }}>Ücretsiz Dene</a>
+          </div>
         </div>
       </nav>
 
-      {/* Hero */}
-      <section style={{ paddingTop: '148px', paddingBottom: '110px', background: '#FAFBFF', textAlign: 'center' }}>
-        <div style={{ maxWidth: '820px', margin: '0 auto', padding: '0 40px' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 18px', borderRadius: '100px', background: '#EEF2FF', fontSize: '13px', fontWeight: 600, color: '#3730A3', marginBottom: '32px' }}>
-            <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#6366F1' }}/>
-            Eğitim Operasyon Platformu
+      {/* HERO */}
+      <section style={{ background: 'linear-gradient(135deg, #1B3A6B 0%, #2563EB 60%, #1B3A6B 100%)', padding: '80px 24px 60px', textAlign: 'center' }}>
+        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.15)', padding: '5px 14px', borderRadius: '20px', marginBottom: '20px' }}>
+            <span style={{ fontSize: '12px' }}>🇹🇷</span>
+            <span style={{ fontSize: '12px', color: '#fff', fontWeight: 600 }}>KVKK Uyumlu • Türkiye Sunucuları</span>
           </div>
-          <h1 style={{ fontSize: '52px', fontWeight: 800, color: '#0F172A', margin: '0 0 24px', lineHeight: 1.1, letterSpacing: '-1.5px' }}>
-            Eğitim Operasyonunuzu ve<br />
-            <span style={{ color: '#1B3A6B' }}>Öğrenci Gelişimini</span> Tek<br />
-            Platformda Yönetin
+          <h1 style={{ fontSize: 'clamp(28px, 5vw, 52px)', fontWeight: 900, color: '#fff', lineHeight: 1.2, marginBottom: '20px', margin: '0 0 20px' }}>
+            Dershane ve Okul Yönetimini<br />
+            <span style={{ color: '#93C5FD' }}>Yapay Zeka ile Dönüştürün</span>
           </h1>
-          <p style={{ fontSize: '18px', color: '#475569', margin: '0 auto 16px', lineHeight: 1.75, maxWidth: '580px' }}>
-            Ders planlama, öğretmen yönetimi ve öğrenci performans analizini tek sistemde birleştiren entegre çözüm.
+          <p style={{ fontSize: 'clamp(14px, 2vw, 18px)', color: 'rgba(255,255,255,0.8)', lineHeight: 1.7, marginBottom: '36px', maxWidth: '600px', margin: '0 auto 36px' }}>
+            Planlama, sınav analizi, öğrenci takibi ve AI destekli rehberlik — hepsi tek platformda. Dershane ve okullar için tasarlandı.
           </p>
-          <p style={{ fontSize: '15px', color: '#94A3B8', margin: '0 auto 44px', lineHeight: 1.7, maxWidth: '560px' }}>
-            Eğitim kurumlarının planlama, operasyon ve gelişim süreçlerini daha sistematik, ölçülebilir ve sürdürülebilir hale getirmek için tasarlanmıştır.
-          </p>
-          <div style={{ display: 'flex', gap: '14px', justifyContent: 'center' }}>
-            <a href="mailto:fuat@servispro.com.tr?subject=DershaneOPS Demo Talebi" style={{ padding: '15px 32px', borderRadius: '10px', background: '#1B3A6B', color: '#fff', fontSize: '15px', fontWeight: 700, textDecoration: 'none', boxShadow: '0 4px 16px rgba(27,58,107,0.2)' }}>
-              Demo Talep Et
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <a href="/login" style={{ padding: '14px 28px', borderRadius: '12px', fontSize: '15px', fontWeight: 700, color: '#1B3A6B', textDecoration: 'none', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
+              14 Gün Ücretsiz Dene →
             </a>
-            <Link href="/login" style={{ padding: '15px 32px', borderRadius: '10px', background: '#fff', color: '#1B3A6B', fontSize: '15px', fontWeight: 700, textDecoration: 'none', border: '1.5px solid #E2E8F0' }}>
-              Ücretsiz Deneyin
-            </Link>
+            <a href="#ozellikler" style={{ padding: '14px 28px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, color: '#fff', textDecoration: 'none', background: 'rgba(255,255,255,0.15)', border: '1.5px solid rgba(255,255,255,0.3)' }}>
+              Özellikleri İncele
+            </a>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '24px', marginTop: '36px', flexWrap: 'wrap' }}>
+            {[
+              { label: 'Kurulum', value: 'Hemen' },
+              { label: 'Öğrenci (Deneme)', value: '20 ücretsiz' },
+              { label: 'AI Özellikler', value: 'Açık' },
+              { label: 'Destek', value: '7/24' },
+            ].map(m => (
+              <div key={m.label} style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '18px', fontWeight: 800, color: '#fff' }}>{m.value}</div>
+                <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>{m.label}</div>
+              </div>
+            ))}
           </div>
         </div>
+      </section>
 
-        {/* Metrics */}
-        <div style={{ maxWidth: '720px', margin: '72px auto 0', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', background: '#fff', borderRadius: '16px', border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 2px 16px rgba(0,0,0,0.04)' }}>
-          {[
-            { value: '4', label: 'Kullanıcı Rolü' },
-            { value: '15+', label: 'Modül' },
-            { value: 'AI', label: 'Destekli Analiz' },
-            { value: 'KVKK', label: 'Uyumlu' },
-          ].map((s, i) => (
-            <div key={s.label} style={{ padding: '28px 16px', textAlign: 'center', borderRight: i < 3 ? '1px solid #F1F5F9' : 'none' }}>
-              <div style={{ fontSize: '26px', fontWeight: 800, color: '#1B3A6B', letterSpacing: '-0.5px' }}>{s.value}</div>
-              <div style={{ fontSize: '12px', color: '#94A3B8', fontWeight: 500, marginTop: '6px' }}>{s.label}</div>
-            </div>
+      {/* SOSYAL KANIT */}
+      <section style={{ background: '#F8FAFF', padding: '24px', borderBottom: '1px solid #E2EAF8' }}>
+        <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: '13px', color: '#7A8FA8', fontWeight: 600 }}>Güvenilen platform:</span>
+          {['Dershaneler', 'Özel Okullar', 'Etüt Merkezleri', 'Eğitim Koçları'].map(item => (
+            <span key={item} style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B', padding: '4px 12px', borderRadius: '20px', background: '#EEF3FB' }}>✓ {item}</span>
           ))}
         </div>
       </section>
 
-      {/* Trust */}
-      <section style={{ padding: '100px 80px', background: '#fff' }}>
-        <div style={{ maxWidth: '1000px', margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '80px', alignItems: 'center' }}>
-          <div>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: '#6366F1', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '16px' }}>Şeffaflık ve Kontrol</div>
-            <h2 style={{ fontSize: '36px', fontWeight: 800, color: '#0F172A', margin: '0 0 20px', lineHeight: 1.2, letterSpacing: '-0.5px' }}>
-              Eğitim Süreçlerinde Daha Fazla Kontrol ve Şeffaflık
-            </h2>
-            <p style={{ fontSize: '16px', color: '#475569', lineHeight: 1.8, margin: 0 }}>
-              Günlük operasyonlar, ders planlamaları ve öğrenci gelişim takibi çoğu kurumda farklı araçlar ve manuel süreçlerle yürütülmektedir.
-            </p>
-            <p style={{ fontSize: '16px', color: '#475569', lineHeight: 1.8, margin: '16px 0 0' }}>
-              Bu platform, tüm bu süreçleri tek merkezde toplayarak daha düzenli, izlenebilir ve yönetilebilir bir yapı sunar.
-            </p>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            {[
-              { label: 'Ders programlarını uygunluklara göre oluşturur', ok: true },
-              { label: 'Çakışmaları sistematik olarak engeller', ok: true },
-              { label: 'Telafi süreçlerini düzenli hale getirir', ok: true },
-              { label: 'Öğrenci gelişimini analiz edilebilir hale getirir', ok: true },
-              { label: 'Tüm süreci merkezi bir panelden yönetmenizi sağlar', ok: true },
-            ].map(item => (
-              <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 18px', background: '#F8FAFF', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-                <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M2 5.5l2.5 2.5 4.5-5" stroke="#4F46E5" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                </div>
-                <span style={{ fontSize: '14px', color: '#334155', fontWeight: 500 }}>{item.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section id="features" style={{ padding: '100px 80px', background: '#F8FAFF' }}>
+      {/* ÖZELLİKLER */}
+      <section id="ozellikler" style={{ padding: '72px 24px' }}>
         <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
-          <div style={{ marginBottom: '60px' }}>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: '#6366F1', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '14px' }}>Temel Modüller</div>
-            <h2 style={{ fontSize: '38px', fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '-0.5px' }}>Tüm Süreci Kapsayan Modüller</h2>
+          <div style={{ textAlign: 'center', marginBottom: '48px' }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#6B4FC8', background: '#F0ECFB', padding: '4px 14px', borderRadius: '20px', display: 'inline-block', marginBottom: '12px' }}>
+              9 GÜÇLÜ MODÜL
+            </div>
+            <h2 style={{ fontSize: 'clamp(22px, 4vw, 36px)', fontWeight: 800, color: '#1B3A6B', margin: '0 0 12px' }}>Her ihtiyacınız için bir modül</h2>
+            <p style={{ fontSize: '16px', color: '#7A8FA8', maxWidth: '500px', margin: '0 auto' }}>İhtiyacınıza göre modülleri seçin, yalnızca kullandığınız için ödeyin</p>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '18px' }}>
-            {[
-              {
-                title: 'Akıllı Ders Planlama',
-                desc: 'Öğrenci ve öğretmen uygunluklarını dikkate alarak ders programlarını planlamayı kolaylaştırır ve daha verimli bir yapı sunar.',
-                icon: (
-                  <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-                    <rect x="2" y="3" width="18" height="16" rx="2" stroke="#1B3A6B" strokeWidth="1.6"/>
-                    <path d="M7 1v4M15 1v4M2 8h18" stroke="#1B3A6B" strokeWidth="1.6" strokeLinecap="round"/>
-                    <path d="M7 13h4M7 16h2" stroke="#1B3A6B" strokeWidth="1.6" strokeLinecap="round"/>
-                  </svg>
-                )
-              },
-              {
-                title: 'Operasyon Yönetimi',
-                desc: 'Ders değişiklikleri, planlamalar ve günlük süreçler tek merkezden kontrol edilebilir yapıda organize edilir.',
-                icon: (
-                  <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-                    <circle cx="11" cy="11" r="9" stroke="#1B3A6B" strokeWidth="1.6"/>
-                    <path d="M11 6v5l3 3" stroke="#1B3A6B" strokeWidth="1.6" strokeLinecap="round"/>
-                  </svg>
-                )
-              },
-              {
-                title: 'Öğrenci Gelişim Analizi',
-                desc: 'Her öğrencinin akademik gelişimi, güçlü yönleri ve gelişime açık alanları sistematik olarak analiz edilir.',
-                icon: (
-                  <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-                    <path d="M3 17l4-5 4 3 4-6 4 4" stroke="#1B3A6B" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M3 3v14h16" stroke="#1B3A6B" strokeWidth="1.6" strokeLinecap="round"/>
-                  </svg>
-                )
-              },
-              {
-                title: 'Akademik Performans Raporları',
-                desc: 'Öğrenci ilerlemesini takip etmeyi kolaylaştıran detaylı ve anlaşılır raporlar sunar.',
-                icon: (
-                  <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-                    <path d="M13 2H6a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V7l-5-5z" stroke="#1B3A6B" strokeWidth="1.6" strokeLinejoin="round"/>
-                    <path d="M13 2v5h5M8 12h6M8 15h4" stroke="#1B3A6B" strokeWidth="1.6" strokeLinecap="round"/>
-                  </svg>
-                )
-              },
-              {
-                title: 'PDF Program ve Veli Bilgilendirme',
-                desc: 'Haftalık ders programları düzenli ve profesyonel formatta oluşturulabilir ve kolayca paylaşılabilir.',
-                icon: (
-                  <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-                    <rect x="2" y="2" width="18" height="18" rx="2" stroke="#1B3A6B" strokeWidth="1.6"/>
-                    <path d="M7 7h8M7 11h8M7 15h5" stroke="#1B3A6B" strokeWidth="1.6" strokeLinecap="round"/>
-                  </svg>
-                )
-              },
-              {
-                title: 'Telafi ve Süreç Yönetimi',
-                desc: 'İptal edilen derslerin yeniden planlanmasını ve süreç takibini sistematik biçimde kolaylaştırır.',
-                icon: (
-                  <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-                    <path d="M4 11a7 7 0 017-7" stroke="#1B3A6B" strokeWidth="1.6" strokeLinecap="round"/>
-                    <path d="M18 11a7 7 0 01-7 7" stroke="#1B3A6B" strokeWidth="1.6" strokeLinecap="round"/>
-                    <path d="M4 7V4h3M18 15v3h-3" stroke="#1B3A6B" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                )
-              },
-            ].map(f => (
-              <div key={f.title} style={{ background: '#fff', borderRadius: '16px', padding: '28px', border: '1px solid #E2E8F0' }}>
-                <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '18px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
+            {features.map(f => (
+              <div key={f.title} style={{ background: '#fff', borderRadius: '16px', padding: '22px', border: '1px solid #E2EAF8', transition: 'all 0.2s', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+                <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#EEF3FB', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', marginBottom: '14px' }}>
                   {f.icon}
                 </div>
-                <div style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A', marginBottom: '10px' }}>{f.title}</div>
-                <div style={{ fontSize: '13.5px', color: '#64748B', lineHeight: 1.7 }}>{f.desc}</div>
+                <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#1B3A6B', marginBottom: '8px', margin: '0 0 8px' }}>{f.title}</h3>
+                <p style={{ fontSize: '13px', color: '#7A8FA8', lineHeight: 1.6, margin: 0 }}>{f.desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Value */}
-      <section style={{ padding: '100px 80px', background: '#fff' }}>
-        <div style={{ maxWidth: '1000px', margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '80px', alignItems: 'center' }}>
-          <div>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: '#6366F1', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '16px' }}>Değer Önerisi</div>
-            <h2 style={{ fontSize: '36px', fontWeight: 800, color: '#0F172A', margin: '0 0 20px', lineHeight: 1.2, letterSpacing: '-0.5px' }}>
-              Daha Verimli Bir Eğitim Operasyonu İçin Tasarlandı
-            </h2>
+      {/* SATIŞ PAKETLERİ */}
+      <section id="paketler" style={{ padding: '72px 24px', background: '#F8FAFF' }}>
+        <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '48px' }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#2E7D52', background: '#EAF4EE', padding: '4px 14px', borderRadius: '20px', display: 'inline-block', marginBottom: '12px' }}>
+              HİBRİT FİYATLANDIRMA
+            </div>
+            <h2 style={{ fontSize: 'clamp(22px, 4vw, 36px)', fontWeight: 800, color: '#1B3A6B', margin: '0 0 12px' }}>Size uygun paketi seçin</h2>
+            <p style={{ fontSize: '16px', color: '#7A8FA8' }}>Temel paket + ihtiyacınıza göre modüller + öğrenci sayısı</p>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {[
-              'Planlama süreçlerinde zaman tasarrufu sağlar',
-              'Operasyonel hataları azaltır',
-              'Öğretmen ve ders dağılımını dengeler',
-              'Öğrenci gelişimini görünür hale getirir',
-              'Veli iletişimini daha düzenli hale getirir',
-            ].map((item, i) => (
-              <div key={item} style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '12px', fontWeight: 700, color: '#94A3B8' }}>
-                  {String(i + 1).padStart(2, '0')}
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px', marginBottom: '32px' }}>
+            {packages.map(pkg => (
+              <div key={pkg.key} style={{ background: '#fff', borderRadius: '18px', overflow: 'hidden', border: '2px solid', borderColor: pkg.popular ? pkg.border : '#E2EAF8', boxShadow: pkg.popular ? '0 8px 32px rgba(46,125,82,0.15)' : '0 2px 8px rgba(0,0,0,0.04)', position: 'relative' }}>
+                {pkg.popular && (
+                  <div style={{ position: 'absolute', top: '14px', right: '14px', background: '#2E7D52', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px' }}>EN POPÜLER</div>
+                )}
+                <div style={{ background: pkg.bg, padding: '22px 20px' }}>
+                  <div style={{ fontSize: '28px', marginBottom: '8px' }}>{pkg.icon}</div>
+                  <div style={{ fontSize: '16px', fontWeight: 800, color: pkg.color, marginBottom: '4px' }}>{pkg.name}</div>
+                  <div style={{ fontSize: '11px', color: '#7A8FA8', marginBottom: '14px' }}>{pkg.desc}</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                    <span style={{ fontSize: '28px', fontWeight: 900, color: pkg.color }}>{pkg.price}</span>
+                    <span style={{ fontSize: '12px', color: '#7A8FA8' }}>₺/{pkg.period}</span>
+                  </div>
                 </div>
-                <span style={{ fontSize: '15px', color: '#334155', fontWeight: 500 }}>{item}</span>
+                <div style={{ padding: '18px 20px' }}>
+                  {pkg.features.map(f => (
+                    <div key={f} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 0', fontSize: '12.5px', color: '#374151' }}>
+                      <span style={{ color: pkg.color, fontSize: '14px', flexShrink: 0 }}>✓</span>
+                      {f}
+                    </div>
+                  ))}
+                  <a href="/login" style={{ display: 'block', marginTop: '16px', padding: '10px', borderRadius: '10px', background: pkg.color, color: '#fff', fontSize: '13px', fontWeight: 700, textDecoration: 'none', textAlign: 'center' }}>
+                    Hemen Başla
+                  </a>
+                </div>
               </div>
             ))}
           </div>
-        </div>
-      </section>
 
-      {/* Positioning */}
-      <section style={{ padding: '100px 80px', background: '#0F172A', textAlign: 'center' }}>
-        <div style={{ maxWidth: '780px', margin: '0 auto' }}>
-          <div style={{ fontSize: '12px', fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '24px' }}>Konumlandırma</div>
-          <h2 style={{ fontSize: '42px', fontWeight: 800, color: '#fff', margin: '0 0 24px', lineHeight: 1.15, letterSpacing: '-1px' }}>
-            Eğitim Kurumları İçin<br />Entegre Bir Yönetim Yaklaşımı
-          </h2>
-          <p style={{ fontSize: '17px', color: 'rgba(255,255,255,0.55)', lineHeight: 1.8, maxWidth: '620px', margin: '0 auto' }}>
-            Bu platform yalnızca ders programı oluşturmak için değil, eğitim süreçlerinin bütününü daha sistematik bir yapıya kavuşturmak için geliştirilmiştir. Planlama, operasyon ve analiz süreçlerini tek bir yapı altında birleştirir.
-          </p>
-        </div>
-      </section>
-
-      {/* Target */}
-      <section id="target" style={{ padding: '100px 80px', background: '#fff' }}>
-        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
-          <div style={{ marginBottom: '56px' }}>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: '#6366F1', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '14px' }}>Hedef Kitle</div>
-            <h2 style={{ fontSize: '38px', fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '-0.5px' }}>Kimler İçin Uygun</h2>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: '16px' }}>
-            {[
-              { label: 'Butik Dershaneler', icon: (
-                <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
-                  <path d="M3 21V10l10-6 10 6v11" stroke="#1B3A6B" strokeWidth="1.6" strokeLinejoin="round"/>
-                  <rect x="9" y="14" width="8" height="7" rx="1" stroke="#1B3A6B" strokeWidth="1.6"/>
-                </svg>
-              )},
-              { label: 'Etüt Merkezleri', icon: (
-                <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
-                  <rect x="3" y="3" width="20" height="20" rx="3" stroke="#1B3A6B" strokeWidth="1.6"/>
-                  <path d="M8 13h10M8 9h6M8 17h8" stroke="#1B3A6B" strokeWidth="1.6" strokeLinecap="round"/>
-                </svg>
-              )},
-              { label: 'Özel Kurslar', icon: (
-                <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
-                  <path d="M13 3l2.5 5 5.5.8-4 3.9.9 5.5L13 15.5 8.1 18.2l.9-5.5L5 8.8l5.5-.8L13 3z" stroke="#1B3A6B" strokeWidth="1.6" strokeLinejoin="round"/>
-                </svg>
-              )},
-              { label: 'Birebir Eğitim', icon: (
-                <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
-                  <circle cx="9" cy="9" r="4" stroke="#1B3A6B" strokeWidth="1.6"/>
-                  <circle cx="19" cy="9" r="4" stroke="#1B3A6B" strokeWidth="1.6"/>
-                  <path d="M3 23v-1a6 6 0 016-6h8a6 6 0 016 6v1" stroke="#1B3A6B" strokeWidth="1.6" strokeLinecap="round"/>
-                </svg>
-              )},
-              { label: 'Eğitim Girişimleri', icon: (
-                <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
-                  <path d="M13 4l9 4-9 4-9-4 9-4z" stroke="#1B3A6B" strokeWidth="1.6" strokeLinejoin="round"/>
-                  <path d="M4 12v5c0 2.5 4 4.5 9 4.5s9-2 9-4.5v-5" stroke="#1B3A6B" strokeWidth="1.6" strokeLinecap="round"/>
-                </svg>
-              )},
-            ].map(item => (
-              <div key={item.label} style={{ background: '#F8FAFF', borderRadius: '14px', padding: '28px 16px', textAlign: 'center', border: '1px solid #E2E8F0' }}>
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '14px' }}>{item.icon}</div>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: '#334155', lineHeight: 1.4 }}>{item.label}</div>
-              </div>
-            ))}
+          {/* Öğrenci Çarpanı */}
+          <div style={{ background: '#fff', borderRadius: '14px', padding: '22px 24px', border: '1px solid #E2EAF8' }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B', marginBottom: '14px' }}>👥 Öğrenci Sayısı Çarpanı</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '10px' }}>
+              {[
+                { range: '0–100 öğrenci', extra: 'Dahil', color: '#2E7D52', bg: '#EAF4EE' },
+                { range: '101–250 öğrenci', extra: '+1.500 ₺/ay', color: '#1B3A6B', bg: '#EEF3FB' },
+                { range: '251–500 öğrenci', extra: '+3.000 ₺/ay', color: '#B45309', bg: '#FDF4E7' },
+                { range: '500+ öğrenci', extra: 'Özel Fiyat', color: '#6B4FC8', bg: '#F0ECFB' },
+              ].map(t => (
+                <div key={t.range} style={{ background: t.bg, borderRadius: '10px', padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '12px', color: '#374151' }}>{t.range}</span>
+                  <strong style={{ fontSize: '13px', color: t.color }}>{t.extra}</strong>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Usage Model */}
-      <section id="usage" style={{ padding: '100px 80px', background: '#F8FAFF' }}>
+      {/* DERSHANE vs OKUL */}
+      <section id="fiyatlar" style={{ padding: '72px 24px' }}>
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-          <div style={{ marginBottom: '56px', textAlign: 'center' }}>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: '#6366F1', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '14px' }}>Başlangıç Modeli</div>
-            <h2 style={{ fontSize: '38px', fontWeight: 800, color: '#0F172A', margin: '0 0 16px', letterSpacing: '-0.5px' }}>Kurumunuza Uygun Şekilde Başlayın</h2>
-            <p style={{ fontSize: '16px', color: '#64748B', margin: 0, lineHeight: 1.7 }}>
-              Platform, kurum ihtiyaçlarına göre yapılandırılabilir bir model sunar.
-            </p>
+          <div style={{ textAlign: 'center', marginBottom: '36px' }}>
+            <h2 style={{ fontSize: 'clamp(22px, 4vw, 36px)', fontWeight: 800, color: '#1B3A6B', margin: '0 0 12px' }}>Kim için?</h2>
+            <p style={{ fontSize: '16px', color: '#7A8FA8' }}>Dershane ve okullar için özel paket kombinasyonları</p>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '16px' }}>
-            {[
-              { step: '01', label: 'Demo ile Başlangıç', desc: 'Sistemi canlı olarak deneyimleyin' },
-              { step: '02', label: 'Özel Yapılandırma', desc: 'Kurumunuza göre ayarlanır' },
-              { step: '03', label: 'Sınırlı Süreli Deneme', desc: 'Risk almadan test edin' },
-              { step: '04', label: 'Geçiş Desteği', desc: 'Süreç odaklı tam destek' },
-            ].map(item => (
-              <div key={item.step} style={{ background: '#fff', borderRadius: '16px', padding: '28px 22px', border: '1px solid #E2E8F0' }}>
-                <div style={{ fontSize: '11px', fontWeight: 800, color: '#CBD5E1', letterSpacing: '1px', marginBottom: '12px' }}>{item.step}</div>
-                <div style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A', marginBottom: '8px' }}>{item.label}</div>
-                <div style={{ fontSize: '13px', color: '#64748B', lineHeight: 1.6 }}>{item.desc}</div>
+
+          <div style={{ display: 'flex', gap: '4px', background: '#F0F4F9', borderRadius: '12px', padding: '4px', marginBottom: '28px', maxWidth: '360px', margin: '0 auto 28px' }}>
+            {[{ id: 'dershane', label: '🏫 Dershane' }, { id: 'okul', label: '🏢 Okul' }].map(t => (
+              <button key={t.id} onClick={() => setActiveTab(t.id)} style={{ flex: 1, padding: '10px', borderRadius: '9px', border: 'none', cursor: 'pointer', background: activeTab === t.id ? '#fff' : 'transparent', color: activeTab === t.id ? '#1B3A6B' : '#7A8FA8', fontSize: '13px', fontWeight: activeTab === t.id ? 700 : 500, boxShadow: activeTab === t.id ? '0 2px 8px rgba(0,0,0,0.08)' : 'none' }}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {activeTab === 'dershane' ? (
+            <div style={{ background: '#EEF3FB', borderRadius: '16px', padding: '28px' }}>
+              <div style={{ fontSize: '22px', fontWeight: 800, color: '#1B3A6B', marginBottom: '8px' }}>Dershane Paketi</div>
+              <div style={{ fontSize: '14px', color: '#7A8FA8', marginBottom: '20px' }}>Küçük ve orta ölçekli dershaneler için ideal başlangıç</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '10px', marginBottom: '20px' }}>
+                {dershanePkg.map(f => (
+                  <div key={f} style={{ background: '#fff', borderRadius: '10px', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: '#1B3A6B' }}>
+                    <span style={{ color: '#1B3A6B' }}>✓</span> {f}
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <div style={{ fontSize: '28px', fontWeight: 900, color: '#1B3A6B' }}>~11.000 ₺<span style={{ fontSize: '14px', fontWeight: 500, color: '#7A8FA8' }}>/ay</span></div>
+                  <div style={{ fontSize: '12px', color: '#7A8FA8' }}>150 öğrenci • Gelişim paket + AI + Öğrenci app</div>
+                </div>
+                <a href="/login" style={{ padding: '12px 24px', borderRadius: '10px', background: '#1B3A6B', color: '#fff', fontSize: '14px', fontWeight: 700, textDecoration: 'none' }}>
+                  Ücretsiz Başla →
+                </a>
+              </div>
+            </div>
+          ) : (
+            <div style={{ background: '#FDF4E7', borderRadius: '16px', padding: '28px' }}>
+              <div style={{ fontSize: '22px', fontWeight: 800, color: '#B45309', marginBottom: '8px' }}>Okul Paketi</div>
+              <div style={{ fontSize: '14px', color: '#7A8FA8', marginBottom: '20px' }}>MEB uyumlu kazanım sistemi ve rehberlik modülleri</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '10px', marginBottom: '20px' }}>
+                {okulPkg.map(f => (
+                  <div key={f} style={{ background: '#fff', borderRadius: '10px', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, color: '#B45309' }}>
+                    <span>✓</span> {f}
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <div style={{ fontSize: '28px', fontWeight: 900, color: '#B45309' }}>~23.000 ₺<span style={{ fontSize: '14px', fontWeight: 500, color: '#7A8FA8' }}>/ay</span></div>
+                  <div style={{ fontSize: '12px', color: '#7A8FA8' }}>400 öğrenci • Kurumsal + Sınav + Rehberlik + AI</div>
+                </div>
+                <a href="/login" style={{ padding: '12px 24px', borderRadius: '10px', background: '#B45309', color: '#fff', fontSize: '14px', fontWeight: 700, textDecoration: 'none' }}>
+                  Demo İste →
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* REFERANSLAR */}
+      <section style={{ padding: '72px 24px', background: '#F8FAFF' }}>
+        <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+          <h2 style={{ textAlign: 'center', fontSize: 'clamp(22px, 4vw, 32px)', fontWeight: 800, color: '#1B3A6B', marginBottom: '36px' }}>Kullanıcılarımız ne diyor?</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}>
+            {testimonials.map(t => (
+              <div key={t.name} style={{ background: '#fff', borderRadius: '16px', padding: '22px', border: '1px solid #E2EAF8' }}>
+                <div style={{ fontSize: '24px', color: '#F59E0B', marginBottom: '12px' }}>★★★★★</div>
+                <p style={{ fontSize: '13.5px', color: '#374151', lineHeight: 1.7, marginBottom: '16px', fontStyle: 'italic' }}>"{t.text}"</p>
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B' }}>{t.name}</div>
+                  <div style={{ fontSize: '11px', color: '#7A8FA8' }}>{t.role}</div>
+                </div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Final CTA */}
-      <section style={{ padding: '120px 80px', background: '#fff', textAlign: 'center' }}>
-        <div style={{ maxWidth: '680px', margin: '0 auto' }}>
-          <h2 style={{ fontSize: '44px', fontWeight: 800, color: '#0F172A', margin: '0 0 18px', lineHeight: 1.1, letterSpacing: '-1px' }}>
-            Eğitim Süreçlerinizi Daha Sistematik Hale Getirin
+      {/* CTA */}
+      <section id="iletisim" style={{ padding: '80px 24px', background: 'linear-gradient(135deg, #1B3A6B 0%, #2563EB 100%)', textAlign: 'center' }}>
+        <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+          <h2 style={{ fontSize: 'clamp(24px, 4vw, 40px)', fontWeight: 900, color: '#fff', marginBottom: '16px' }}>
+            14 gün ücretsiz deneyin
           </h2>
-          <p style={{ fontSize: '17px', color: '#64748B', margin: '0 0 44px', lineHeight: 1.75 }}>
-            Planlama, operasyon ve öğrenci gelişimini tek platformda yönetin.
+          <p style={{ fontSize: '16px', color: 'rgba(255,255,255,0.8)', marginBottom: '32px', lineHeight: 1.6 }}>
+            Kredi kartı gerekmez. 20 öğrenciye kadar tüm AI özellikleri açık. Kurulum 5 dakika.
           </p>
-          <div style={{ display: 'flex', gap: '14px', justifyContent: 'center' }}>
-            <a href="mailto:fuat@servispro.com.tr?subject=DershaneOPS Demo Talebi" style={{ padding: '16px 36px', borderRadius: '10px', background: '#1B3A6B', color: '#fff', fontSize: '15px', fontWeight: 700, textDecoration: 'none', boxShadow: '0 4px 20px rgba(27,58,107,0.18)' }}>
-              Demo Talep Et
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <a href="/login" style={{ padding: '14px 32px', borderRadius: '12px', fontSize: '15px', fontWeight: 700, color: '#1B3A6B', textDecoration: 'none', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
+              Hemen Başla — Ücretsiz
             </a>
-            <Link href="/login" style={{ padding: '16px 36px', borderRadius: '10px', background: '#fff', color: '#1B3A6B', fontSize: '15px', fontWeight: 700, textDecoration: 'none', border: '1.5px solid #E2E8F0' }}>
-              Ücretsiz Deneyin
-            </Link>
+            <a href="mailto:info@dershaneops.com" style={{ padding: '14px 24px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, color: '#fff', textDecoration: 'none', background: 'rgba(255,255,255,0.15)', border: '1.5px solid rgba(255,255,255,0.3)' }}>
+              Demo İste
+            </a>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer style={{ padding: '32px 80px', borderTop: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ width: '28px', height: '28px', borderRadius: '7px', background: '#1B3A6B', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <rect x="1" y="1" width="5" height="5" rx="1" fill="white"/>
-              <rect x="8" y="1" width="5" height="5" rx="1" fill="white" opacity=".45"/>
-              <rect x="1" y="8" width="5" height="5" rx="1" fill="white" opacity=".45"/>
-              <rect x="8" y="8" width="5" height="5" rx="1" fill="white"/>
-            </svg>
+      {/* FOOTER */}
+      <footer style={{ background: '#0F2244', padding: '40px 24px 24px' }}>
+        <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '28px', marginBottom: '32px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                <div style={{ width: '28px', height: '28px', borderRadius: '7px', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 800, color: '#1B3A6B' }}>D</div>
+                <span style={{ fontSize: '14px', fontWeight: 800, color: '#fff' }}>DershaneOPS</span>
+              </div>
+              <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', lineHeight: 1.7 }}>
+                Türkiye'nin eğitim kurumlarına özel AI destekli yönetim platformu.
+              </p>
+            </div>
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: 'rgba(255,255,255,0.5)', marginBottom: '12px', letterSpacing: '0.5px' }}>ÜRÜN</div>
+              {['Özellikler', 'Fiyatlar', 'Paketler', 'Güvenlik'].map(item => (
+                <div key={item} style={{ marginBottom: '8px' }}>
+                  <a href="#" style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', textDecoration: 'none' }}>{item}</a>
+                </div>
+              ))}
+            </div>
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: 'rgba(255,255,255,0.5)', marginBottom: '12px', letterSpacing: '0.5px' }}>DESTEK</div>
+              {['Dokümantasyon', 'Demo İste', 'SSS', 'İletişim'].map(item => (
+                <div key={item} style={{ marginBottom: '8px' }}>
+                  <a href="#" style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', textDecoration: 'none' }}>{item}</a>
+                </div>
+              ))}
+            </div>
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: 'rgba(255,255,255,0.5)', marginBottom: '12px', letterSpacing: '0.5px' }}>YASAL</div>
+              {['KVKK Uyum', 'Gizlilik Politikası', 'Kullanım Şartları'].map(item => (
+                <div key={item} style={{ marginBottom: '8px' }}>
+                  <a href="#" style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', textDecoration: 'none' }}>{item}</a>
+                </div>
+              ))}
+            </div>
           </div>
-          <div>
-            <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B' }}>DershaneOPS</div>
-            <div style={{ fontSize: '11px', color: '#CBD5E1' }}>MFK Danışmanlık © 2025</div>
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)' }}>© 2026 DershaneOPS. Tüm hakları saklıdır.</div>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: '4px' }}>🔒 SSL Güvenli</span>
+              <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: '4px' }}>🇹🇷 KVKK Uyumlu</span>
+              <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', gap: '4px' }}>⚡ Vercel</span>
+            </div>
           </div>
-        </div>
-        <div style={{ display: 'flex', gap: '32px', alignItems: 'center' }}>
-          <a href="mailto:fuat@servispro.com.tr" style={{ fontSize: '13px', color: '#94A3B8', textDecoration: 'none' }}>fuat@servispro.com.tr</a>
-          <a href="https://servispro.com.tr" target="_blank" rel="noreferrer" style={{ fontSize: '13px', color: '#94A3B8', textDecoration: 'none' }}>servispro.com.tr</a>
-          <span style={{ fontSize: '12px', color: '#CBD5E1' }}>KVKK Uyumlu</span>
         </div>
       </footer>
     </div>
