@@ -23,6 +23,23 @@ export default function TeacherPanelPage() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
+
+  // Takvim state'leri
+  const [calendarStudent, setCalendarStudent] = useState<any>(null)
+  const [studentCalendar, setStudentCalendar] = useState<any[]>([])
+  const [calendarNotes, setCalendarNotes] = useState<any[]>([])
+  const [selectedCalDate, setSelectedCalDate] = useState(new Date().toISOString().slice(0, 10))
+  const [calendarView, setCalendarView] = useState<'week' | 'month'>('week')
+  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(getMonday(new Date()))
+  const [currentMonth, setCurrentMonth] = useState<Date>(new Date())
+  const [noteForm, setNoteForm] = useState({ note: '', evaluation: 'good' })
+  const [savingNote, setSavingNote] = useState(false)
+  const [noteSuccess, setNoteSuccess] = useState(false)
+  const [newCalItem, setNewCalItem] = useState({ title: '', subject_id: '', topic_id: '', calendar_date: new Date().toISOString().slice(0, 10), duration_minutes: 45, question_count: 0 })
+  const [calTopics, setCalTopics] = useState<any[]>([])
+  const [savingCalItem, setSavingCalItem] = useState(false)
+  const [showAddForm, setShowAddForm] = useState(false)
+
   const [form, setForm] = useState({
     student_id: '', subject_id: '', topic_id: '',
     attempt_date: new Date().toISOString().slice(0, 10),
@@ -31,9 +48,19 @@ export default function TeacherPanelPage() {
   })
   const supabase = createClient()
 
+  function getMonday(d: Date) {
+    const date = new Date(d)
+    const day = date.getDay()
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1)
+    date.setDate(diff)
+    date.setHours(0, 0, 0, 0)
+    return date
+  }
+
   useEffect(() => { load() }, [])
   useEffect(() => { if (form.subject_id) loadTopics(form.subject_id); else setTopics([]) }, [form.subject_id])
   useEffect(() => { if (selectedBook) loadBookChapters(selectedBook); else setBookChapters([]) }, [selectedBook])
+  useEffect(() => { if (newCalItem.subject_id) loadCalTopics(newCalItem.subject_id); else setCalTopics([]) }, [newCalItem.subject_id])
 
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -41,7 +68,6 @@ export default function TeacherPanelPage() {
     const { data: p } = await supabase.from('profiles').select('*').eq('user_id', user.id).single()
     if (!p) { setLoading(false); return }
     setProfile(p)
-
     const { data: l } = await supabase.from('lessons').select('*, profiles!lessons_student_id_fkey(full_name)').eq('teacher_id', p.id).order('scheduled_at', { ascending: false })
     const { data: sub } = await supabase.from('subjects').select('*').order('name')
     const { data: bks } = await supabase.from('books').select('id, name, subject, color').order('name')
@@ -70,10 +96,80 @@ export default function TeacherPanelPage() {
     setForm(p => ({ ...p, topic_id: '' }))
   }
 
+  async function loadCalTopics(subjectId: string) {
+    const { data } = await supabase.from('topics').select('*').eq('subject_id', subjectId).order('order_no')
+    setCalTopics(data ?? [])
+    setNewCalItem(p => ({ ...p, topic_id: '' }))
+  }
+
   async function loadBookChapters(bookId: string) {
     const { data } = await supabase.from('books').select('*, chapters(*, tests(*))').eq('id', bookId).single()
     setBookChapters(data?.chapters ?? [])
     setSelectedTests([])
+  }
+
+  async function loadStudentCalendar(studentId: string) {
+    const [{ data: cal }, { data: notes }] = await Promise.all([
+      supabase.from('study_calendar').select('*, subjects(name), topics(name)').eq('student_id', studentId).order('calendar_date'),
+      supabase.from('calendar_notes').select('*').eq('student_id', studentId).order('calendar_date', { ascending: false }),
+    ])
+    setStudentCalendar(cal ?? [])
+    setCalendarNotes(notes ?? [])
+  }
+
+  async function selectCalendarStudent(s: any) {
+    setCalendarStudent(s)
+    await loadStudentCalendar(s.id)
+    setNoteSuccess(false)
+    setShowAddForm(false)
+  }
+
+  async function saveNote(e: React.FormEvent) {
+    e.preventDefault()
+    if (!calendarStudent || !noteForm.note) return
+    setSavingNote(true)
+    setNoteSuccess(false)
+    await supabase.from('calendar_notes').upsert({
+      tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
+      student_id: calendarStudent.id,
+      teacher_id: profile.id,
+      calendar_date: selectedCalDate,
+      note: noteForm.note,
+      evaluation: noteForm.evaluation,
+    }, { onConflict: 'student_id,teacher_id,calendar_date' })
+    await loadStudentCalendar(calendarStudent.id)
+    setNoteSuccess(true)
+    setNoteForm({ note: '', evaluation: 'good' })
+    setSavingNote(false)
+  }
+
+  async function saveCalItem(e: React.FormEvent) {
+    e.preventDefault()
+    if (!calendarStudent || !newCalItem.title) return
+    setSavingCalItem(true)
+    const d = new Date(newCalItem.calendar_date + 'T12:00:00')
+    await supabase.from('study_calendar').insert({
+      tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
+      student_id: calendarStudent.id,
+      subject_id: newCalItem.subject_id || null,
+      topic_id: newCalItem.topic_id || null,
+      calendar_date: newCalItem.calendar_date,
+      day_of_week: d.getDay() === 0 ? 7 : d.getDay(),
+      title: newCalItem.title,
+      duration_minutes: newCalItem.duration_minutes,
+      question_count: newCalItem.question_count,
+      created_by: profile.id,
+    })
+    await loadStudentCalendar(calendarStudent.id)
+    setNewCalItem({ title: '', subject_id: '', topic_id: '', calendar_date: selectedCalDate, duration_minutes: 45, question_count: 0 })
+    setShowAddForm(false)
+    setSavingCalItem(false)
+  }
+
+  async function deleteCalItem(id: string) {
+    if (!confirm('Bu görevi silmek istiyor musunuz?')) return
+    await supabase.from('study_calendar').delete().eq('id', id)
+    if (calendarStudent) await loadStudentCalendar(calendarStudent.id)
   }
 
   function toggleAssignTest(testId: string) {
@@ -156,6 +252,44 @@ export default function TeacherPanelPage() {
     return { color: '#6B4FC8', bg: '#F0ECFB' }
   }
 
+  function getWeekDays(startDate: Date) {
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(startDate)
+      d.setDate(startDate.getDate() + i)
+      return d
+    })
+  }
+
+  function getMonthDays(date: Date) {
+    const year = date.getFullYear()
+    const month = date.getMonth()
+    const firstDay = new Date(year, month, 1)
+    const lastDay = new Date(year, month + 1, 0)
+    const startPad = (firstDay.getDay() + 6) % 7
+    const days: (Date | null)[] = []
+    for (let i = 0; i < startPad; i++) days.push(null)
+    for (let i = 1; i <= lastDay.getDate(); i++) days.push(new Date(year, month, i))
+    return days
+  }
+
+  function dateStr(d: Date) { return d.toISOString().slice(0, 10) }
+  function getCalForDate(ds: string) { return studentCalendar.filter(c => c.calendar_date === ds) }
+  function getNoteForDate(ds: string) { return calendarNotes.find(n => n.calendar_date === ds) }
+
+  const weekDays = getWeekDays(currentWeekStart)
+  const monthDays = getMonthDays(currentMonth)
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const selectedCalItems = getCalForDate(selectedCalDate)
+  const selectedCalNote = getNoteForDate(selectedCalDate)
+  const DAYS_SHORT = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz']
+  const MONTHS = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık']
+
+  const evalStyle: any = {
+    good: { bg: '#EAF4EE', color: '#2E7D52', label: '✓ Yeterli' },
+    warning: { bg: '#FDF4E7', color: '#B45309', label: '⚠ Dikkat' },
+    insufficient: { bg: '#FEF2F2', color: '#C0392B', label: '✗ Yetersiz' },
+  }
+
   const today = new Date()
   const upcomingLessons = lessons.filter(l => new Date(l.scheduled_at) >= today && l.status === 'scheduled').slice(0, 5)
   const total = form.correct_count + form.wrong_count + form.blank_count
@@ -166,10 +300,10 @@ export default function TeacherPanelPage() {
 
   const TABS = [
     { id: 'dashboard', label: 'Ana Sayfa', icon: '🏠' },
+    { id: 'calendar', label: 'Takvim', icon: '🗓' },
     { id: 'questions', label: 'Soru Girişi', icon: '✏️' },
     { id: 'assign', label: 'Ödev Ata', icon: '📋' },
     { id: 'homework', label: 'Ödev Takibi', icon: '📚' },
-    { id: 'students', label: 'Öğrenciler', icon: '👨‍🎓' },
   ]
 
   if (loading) return (
@@ -184,7 +318,7 @@ export default function TeacherPanelPage() {
   return (
     <div style={{ minHeight: '100vh', background: '#F0F4F9', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
 
-      {/* Mobil Header */}
+      {/* Header */}
       <div style={{ background: '#2E7D52', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>👨‍🏫</div>
@@ -193,15 +327,7 @@ export default function TeacherPanelPage() {
             <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)' }}>Öğretmen — {profile?.full_name?.split(' ')[0]}</div>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{ display: 'flex', gap: '6px' }}>
-            <span style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '10px', background: 'rgba(255,255,255,0.15)', color: '#fff', fontWeight: 600 }}>{students.length} öğrenci</span>
-            <span style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '10px', background: 'rgba(255,255,255,0.15)', color: '#fff', fontWeight: 600 }}>{homework.filter(h => h.status !== 'completed').length} bekliyor</span>
-          </div>
-          <button onClick={signOut} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: '8px', padding: '6px 10px', color: '#fff', fontSize: '12px', cursor: 'pointer' }}>
-            Çıkış
-          </button>
-        </div>
+        <button onClick={signOut} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: '8px', padding: '6px 10px', color: '#fff', fontSize: '12px', cursor: 'pointer' }}>Çıkış</button>
       </div>
 
       {/* Alt Tab Bar */}
@@ -215,7 +341,6 @@ export default function TeacherPanelPage() {
         ))}
       </div>
 
-      {/* İçerik */}
       <div style={{ padding: '16px 16px 80px' }}>
 
         {/* ANA SAYFA */}
@@ -225,7 +350,6 @@ export default function TeacherPanelPage() {
               <div style={{ fontSize: '18px', fontWeight: 800, marginBottom: '4px' }}>Merhaba, {profile?.full_name?.split(' ')[0]}! 👋</div>
               <div style={{ fontSize: '12px', opacity: 0.8 }}>{new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
             </div>
-
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: '10px', marginBottom: '16px' }}>
               {[
                 { label: 'Toplam Öğrenci', value: students.length, icon: '👨‍🎓', color: '#1B3A6B', bg: '#EEF3FB' },
@@ -242,7 +366,6 @@ export default function TeacherPanelPage() {
                 </div>
               ))}
             </div>
-
             {upcomingLessons.length > 0 && (
               <div style={{ background: '#fff', borderRadius: '14px', overflow: 'hidden', marginBottom: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
                 <div style={{ padding: '12px 16px', borderBottom: '1px solid #F0F4F9', fontSize: '13px', fontWeight: 700, color: '#1B3A6B' }}>📅 Yaklaşan Dersler</div>
@@ -261,22 +384,246 @@ export default function TeacherPanelPage() {
                 ))}
               </div>
             )}
+          </div>
+        )}
 
-            {homework.slice(0, 5).length > 0 && (
-              <div style={{ background: '#fff', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-                <div style={{ padding: '12px 16px', borderBottom: '1px solid #F0F4F9', fontSize: '13px', fontWeight: 700, color: '#1B3A6B' }}>📚 Son Ödevler</div>
-                {homework.slice(0, 5).map((h, i) => (
-                  <div key={h.id} style={{ padding: '11px 16px', borderBottom: i < 4 ? '1px solid #F0F4F9' : 'none', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: h.status === 'completed' ? '#2E7D52' : '#B45309', flexShrink: 0 }} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '12.5px', fontWeight: 600, color: '#1B3A6B' }}>{h.profiles?.full_name}</div>
-                      <div style={{ fontSize: '11px', color: '#7A8FA8' }}>{h.tests?.name}</div>
-                    </div>
-                    <span style={{ fontSize: '10.5px', fontWeight: 600, padding: '2px 8px', borderRadius: '8px', background: h.status === 'completed' ? '#EAF4EE' : '#FDF4E7', color: h.status === 'completed' ? '#2E7D52' : '#B45309' }}>
-                      {h.status === 'completed' ? 'Tamam' : 'Bekliyor'}
-                    </span>
-                  </div>
+        {/* TAKVİM YÖNETİMİ */}
+        {activeTab === 'calendar' && (
+          <div>
+            <div style={{ fontSize: '16px', fontWeight: 700, color: '#1B3A6B', marginBottom: '14px' }}>🗓 Çalışma Takvimi Yönetimi</div>
+
+            {/* Öğrenci Seçimi */}
+            <div style={{ background: '#fff', borderRadius: '12px', padding: '14px', marginBottom: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+              <label style={lbl}>Öğrenci Seç</label>
+              <select value={calendarStudent?.id ?? ''} onChange={e => {
+                const s = students.find(x => x.id === e.target.value)
+                if (s) selectCalendarStudent(s)
+              }} style={inp}>
+                <option value="">Öğrenci seçin...</option>
+                {students.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.full_name}{s.grade_level ? ' — ' + s.grade_level + '. Sınıf' : ''}{s.classroom_name ? ' (' + s.classroom_name + ')' : ''}
+                  </option>
                 ))}
+              </select>
+            </div>
+
+            {!calendarStudent ? (
+              <div style={{ background: '#F8FAFF', borderRadius: '12px', padding: '40px', textAlign: 'center', color: '#7A8FA8' }}>
+                <div style={{ fontSize: '32px', marginBottom: '10px' }}>🗓</div>
+                <div>Öğrenci seçerek takvimini yönetin</div>
+              </div>
+            ) : (
+              <div>
+                {/* Görünüm seçici */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B' }}>{calendarStudent.full_name}</div>
+                  <div style={{ display: 'flex', gap: '4px', background: '#F0F4F9', borderRadius: '8px', padding: '3px' }}>
+                    {(['week', 'month'] as const).map(v => (
+                      <button key={v} onClick={() => setCalendarView(v)} style={{ padding: '5px 12px', borderRadius: '6px', border: 'none', background: calendarView === v ? '#fff' : 'transparent', color: calendarView === v ? '#1B3A6B' : '#9CA3AF', fontSize: '12px', fontWeight: calendarView === v ? 700 : 500, cursor: 'pointer' }}>
+                        {v === 'week' ? 'Hafta' : 'Ay'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Haftalık */}
+                {calendarView === 'week' && (
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                      <button onClick={() => { const d = new Date(currentWeekStart); d.setDate(d.getDate() - 7); setCurrentWeekStart(d) }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #D5DFF0', background: '#fff', cursor: 'pointer', fontSize: '16px' }}>‹</button>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#1B3A6B' }}>
+                        {currentWeekStart.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })} — {weekDays[6].toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}
+                      </span>
+                      <button onClick={() => { const d = new Date(currentWeekStart); d.setDate(d.getDate() + 7); setCurrentWeekStart(d) }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #D5DFF0', background: '#fff', cursor: 'pointer', fontSize: '16px' }}>›</button>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '4px', marginBottom: '14px' }}>
+                      {weekDays.map((day, i) => {
+                        const ds = dateStr(day)
+                        const items = getCalForDate(ds)
+                        const note = getNoteForDate(ds)
+                        const isToday = ds === todayStr
+                        const isSelected = ds === selectedCalDate
+                        const completedCount = items.filter(x => x.status === 'completed').length
+                        return (
+                          <button key={i} onClick={() => { setSelectedCalDate(ds); setShowAddForm(false); setNoteSuccess(false) }} style={{ padding: '7px 3px', borderRadius: '10px', border: '2px solid', borderColor: isSelected ? '#2E7D52' : isToday ? '#86EFAC' : '#E2EAF8', background: isSelected ? '#2E7D52' : isToday ? '#F0FFF4' : '#fff', cursor: 'pointer', textAlign: 'center' }}>
+                            <div style={{ fontSize: '9px', color: isSelected ? 'rgba(255,255,255,0.7)' : '#9CA3AF', marginBottom: '2px' }}>{DAYS_SHORT[i]}</div>
+                            <div style={{ fontSize: '14px', fontWeight: 700, color: isSelected ? '#fff' : isToday ? '#2E7D52' : '#374151' }}>{day.getDate()}</div>
+                            {items.length > 0 && (
+                              <div style={{ display: 'flex', justifyContent: 'center', gap: '2px', marginTop: '3px' }}>
+                                {items.slice(0, 3).map((_, idx) => (
+                                  <div key={idx} style={{ width: '5px', height: '5px', borderRadius: '50%', background: idx < completedCount ? '#10B981' : (isSelected ? 'rgba(255,255,255,0.5)' : '#93C5FD') }} />
+                                ))}
+                              </div>
+                            )}
+                            {note && <div style={{ fontSize: '10px', marginTop: '2px' }}>{note.evaluation === 'good' ? '✓' : note.evaluation === 'warning' ? '⚠' : '✗'}</div>}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Aylık */}
+                {calendarView === 'month' && (
+                  <div style={{ marginBottom: '14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                      <button onClick={() => { const d = new Date(currentMonth); d.setMonth(d.getMonth() - 1); setCurrentMonth(d) }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #D5DFF0', background: '#fff', cursor: 'pointer', fontSize: '16px' }}>‹</button>
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B' }}>{MONTHS[currentMonth.getMonth()]} {currentMonth.getFullYear()}</span>
+                      <button onClick={() => { const d = new Date(currentMonth); d.setMonth(d.getMonth() + 1); setCurrentMonth(d) }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #D5DFF0', background: '#fff', cursor: 'pointer', fontSize: '16px' }}>›</button>
+                    </div>
+                    <div style={{ background: '#fff', borderRadius: '12px', padding: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '2px', marginBottom: '6px' }}>
+                        {DAYS_SHORT.map(d => <div key={d} style={{ textAlign: 'center', fontSize: '9px', fontWeight: 700, color: '#9CA3AF', padding: '3px 0' }}>{d}</div>)}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '3px' }}>
+                        {monthDays.map((day, i) => {
+                          if (!day) return <div key={i} />
+                          const ds = dateStr(day)
+                          const items = getCalForDate(ds)
+                          const note = getNoteForDate(ds)
+                          const isToday = ds === todayStr
+                          const isSelected = ds === selectedCalDate
+                          const completedCount = items.filter(x => x.status === 'completed').length
+                          return (
+                            <button key={i} onClick={() => { setSelectedCalDate(ds); setShowAddForm(false); setNoteSuccess(false) }} style={{ padding: '5px 2px', borderRadius: '8px', border: '2px solid', borderColor: isSelected ? '#2E7D52' : isToday ? '#86EFAC' : 'transparent', background: isSelected ? '#2E7D52' : isToday ? '#F0FFF4' : 'transparent', cursor: 'pointer', textAlign: 'center' }}>
+                              <div style={{ fontSize: '12px', fontWeight: isToday ? 800 : 500, color: isSelected ? '#fff' : '#374151' }}>{day.getDate()}</div>
+                              {items.length > 0 && (
+                                <div style={{ display: 'flex', justifyContent: 'center', gap: '1px', marginTop: '2px' }}>
+                                  {items.slice(0, 3).map((_, idx) => (
+                                    <div key={idx} style={{ width: '4px', height: '4px', borderRadius: '50%', background: idx < completedCount ? '#10B981' : (isSelected ? 'rgba(255,255,255,0.5)' : '#93C5FD') }} />
+                                  ))}
+                                </div>
+                              )}
+                              {note && <div style={{ fontSize: '9px' }}>{note.evaluation === 'good' ? '✓' : note.evaluation === 'warning' ? '⚠' : '✗'}</div>}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Seçili gün */}
+                <div style={{ background: '#fff', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: '14px' }}>
+                  <div style={{ padding: '12px 16px', background: '#F8FAFF', borderBottom: '1px solid #F0F4F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B' }}>
+                      {new Date(selectedCalDate + 'T12:00:00').toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })}
+                    </div>
+                    <button onClick={() => { setShowAddForm(!showAddForm); setNewCalItem(p => ({ ...p, calendar_date: selectedCalDate })) }} style={{ padding: '6px 12px', borderRadius: '8px', background: '#2E7D52', color: '#fff', fontSize: '12px', fontWeight: 600, border: 'none', cursor: 'pointer' }}>
+                      {showAddForm ? 'İptal' : '+ Görev Ekle'}
+                    </button>
+                  </div>
+
+                  {/* Görev ekleme formu */}
+                  {showAddForm && (
+                    <div style={{ padding: '14px 16px', background: '#F0FFF4', borderBottom: '1px solid #D1FAE5' }}>
+                      <form onSubmit={saveCalItem}>
+                        <div style={{ marginBottom: '10px' }}>
+                          <label style={lbl}>Görev Başlığı *</label>
+                          <input value={newCalItem.title} onChange={e => setNewCalItem(p => ({ ...p, title: e.target.value }))} placeholder="ör. Matematik - Türevler çalışması" style={inp} required />
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
+                          <div>
+                            <label style={lbl}>Ders</label>
+                            <select value={newCalItem.subject_id} onChange={e => setNewCalItem(p => ({ ...p, subject_id: e.target.value }))} style={inp}>
+                              <option value="">Seçin...</option>
+                              {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label style={lbl}>Konu</label>
+                            <select value={newCalItem.topic_id} onChange={e => setNewCalItem(p => ({ ...p, topic_id: e.target.value }))} style={inp} disabled={calTopics.length === 0}>
+                              <option value="">Seçin...</option>
+                              {calTopics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label style={lbl}>Süre (dk)</label>
+                            <input type="number" min={5} value={newCalItem.duration_minutes} onChange={e => setNewCalItem(p => ({ ...p, duration_minutes: parseInt(e.target.value) || 45 }))} style={inp} />
+                          </div>
+                          <div>
+                            <label style={lbl}>Soru Sayısı</label>
+                            <input type="number" min={0} value={newCalItem.question_count} onChange={e => setNewCalItem(p => ({ ...p, question_count: parseInt(e.target.value) || 0 }))} style={inp} />
+                          </div>
+                        </div>
+                        <button type="submit" disabled={savingCalItem} style={{ width: '100%', padding: '10px', borderRadius: '8px', background: '#2E7D52', color: '#fff', fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
+                          {savingCalItem ? 'Ekleniyor...' : 'Takvime Ekle'}
+                        </button>
+                      </form>
+                    </div>
+                  )}
+
+                  {/* Mevcut görevler */}
+                  {selectedCalItems.length === 0 && !showAddForm ? (
+                    <div style={{ padding: '24px', textAlign: 'center', color: '#7A8FA8', fontSize: '13px' }}>Bu gün için görev yok</div>
+                  ) : selectedCalItems.map((item, i) => {
+                    const isDone = item.status === 'completed'
+                    return (
+                      <div key={item.id} style={{ padding: '12px 16px', borderBottom: i < selectedCalItems.length - 1 ? '1px solid #F0F4F9' : 'none', display: 'flex', alignItems: 'center', gap: '12px', background: isDone ? '#F8FFF8' : '#fff' }}>
+                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: isDone ? '#10B981' : '#1B3A6B', flexShrink: 0 }} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '13px', fontWeight: 600, color: isDone ? '#7A8FA8' : '#1B3A6B', textDecoration: isDone ? 'line-through' : 'none' }}>{item.title}</div>
+                          <div style={{ fontSize: '11px', color: '#7A8FA8' }}>
+                            {item.subjects?.name}{item.topics?.name ? ' — ' + item.topics.name : ''} · {item.duration_minutes} dk
+                            {item.question_count > 0 ? ' · ' + item.question_count + ' soru' : ''}
+                          </div>
+                        </div>
+                        {isDone && <span style={{ fontSize: '11px', fontWeight: 700, color: '#10B981' }}>✓ {item.score} puan</span>}
+                        {!isDone && (
+                          <button onClick={() => deleteCalItem(item.id)} style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #FECACA', background: '#FEF2F2', color: '#C0392B', fontSize: '11px', cursor: 'pointer' }}>Sil</button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Değerlendirme & Not */}
+                <div style={{ background: '#fff', borderRadius: '14px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B', marginBottom: '12px' }}>
+                    👨‍🏫 Değerlendirme & Not — {new Date(selectedCalDate + 'T12:00:00').toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })}
+                  </div>
+
+                  {/* Mevcut not göster */}
+                  {selectedCalNote && (
+                    <div style={{ background: evalStyle[selectedCalNote.evaluation]?.bg, borderRadius: '10px', padding: '12px', marginBottom: '12px', border: '1px solid rgba(0,0,0,0.06)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px', background: 'rgba(255,255,255,0.6)', color: evalStyle[selectedCalNote.evaluation]?.color }}>{evalStyle[selectedCalNote.evaluation]?.label}</span>
+                        <span style={{ fontSize: '10px', color: '#7A8FA8' }}>Mevcut not</span>
+                      </div>
+                      <div style={{ fontSize: '12.5px', color: '#374151', lineHeight: 1.6 }}>{selectedCalNote.note}</div>
+                    </div>
+                  )}
+
+                  <form onSubmit={saveNote}>
+                    <div style={{ marginBottom: '10px' }}>
+                      <label style={lbl}>Değerlendirme</label>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        {[
+                          { val: 'good', label: '✓ Yeterli', color: '#2E7D52', bg: '#EAF4EE' },
+                          { val: 'warning', label: '⚠ Dikkat', color: '#B45309', bg: '#FDF4E7' },
+                          { val: 'insufficient', label: '✗ Yetersiz', color: '#C0392B', bg: '#FEF2F2' },
+                        ].map(ev => (
+                          <button key={ev.val} type="button" onClick={() => setNoteForm(p => ({ ...p, evaluation: ev.val }))} style={{ flex: 1, padding: '8px 4px', borderRadius: '8px', border: '2px solid', borderColor: noteForm.evaluation === ev.val ? ev.color : '#E2EAF8', background: noteForm.evaluation === ev.val ? ev.bg : '#fff', color: ev.color, fontSize: '11px', fontWeight: noteForm.evaluation === ev.val ? 700 : 500, cursor: 'pointer' }}>
+                            {ev.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={lbl}>Not / Yorum *</label>
+                      <textarea value={noteForm.note} onChange={e => setNoteForm(p => ({ ...p, note: e.target.value }))} placeholder="Öğrencinin bugünkü çalışması hakkında yorum ekleyin..." rows={3} style={{ ...inp, resize: 'vertical', fontFamily: 'inherit' }} required />
+                    </div>
+                    {noteSuccess && (
+                      <div style={{ background: '#EAF4EE', border: '1px solid #A7D9B8', borderRadius: '8px', padding: '10px', marginBottom: '10px', fontSize: '12.5px', fontWeight: 600, color: '#2E7D52' }}>
+                        ✓ Not kaydedildi!
+                      </div>
+                    )}
+                    <button type="submit" disabled={savingNote} style={{ width: '100%', padding: '11px', borderRadius: '10px', background: '#1B3A6B', color: '#fff', fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
+                      {savingNote ? 'Kaydediliyor...' : selectedCalNote ? 'Notu Güncelle' : 'Not & Değerlendirme Kaydet'}
+                    </button>
+                  </form>
+                </div>
               </div>
             )}
           </div>
@@ -315,7 +662,6 @@ export default function TeacherPanelPage() {
                     </select>
                   </div>
                 </div>
-
                 <div style={{ background: '#F8FAFF', borderRadius: '12px', padding: '14px', marginBottom: '12px', border: '1px solid #E2EAF8' }}>
                   <div style={{ fontSize: '12px', fontWeight: 700, color: '#1B3A6B', marginBottom: '10px' }}>Soru Sonuçları</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '8px', marginBottom: '10px' }}>
@@ -340,7 +686,6 @@ export default function TeacherPanelPage() {
                     </div>
                   </div>
                 </div>
-
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
                   <div>
                     <label style={lbl}>Tarih</label>
@@ -355,12 +700,10 @@ export default function TeacherPanelPage() {
                     </select>
                   </div>
                 </div>
-
                 <div style={{ marginBottom: '14px' }}>
                   <label style={lbl}>Not</label>
                   <input value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} placeholder="Gözlem veya not..." style={inp} />
                 </div>
-
                 {success && <div style={{ background: '#EAF4EE', border: '1px solid #A7D9B8', borderRadius: '8px', padding: '10px', marginBottom: '12px', fontSize: '12.5px', fontWeight: 600, color: '#2E7D52' }}>✓ Kayıt eklendi!</div>}
                 <button type="submit" disabled={saving || total === 0} style={{ width: '100%', padding: '13px', borderRadius: '10px', background: '#2E7D52', color: '#fff', fontSize: '14px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
                   {saving ? 'Kaydediliyor...' : 'Kaydet ve Skoru Güncelle'}
@@ -374,8 +717,6 @@ export default function TeacherPanelPage() {
         {activeTab === 'assign' && (
           <div>
             <div style={{ fontSize: '16px', fontWeight: 700, color: '#1B3A6B', marginBottom: '14px' }}>📋 Ödev Ata</div>
-
-            {/* Öğrenci ve Tarih */}
             <div style={{ background: '#fff', borderRadius: '14px', padding: '16px', marginBottom: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
                 <div>
@@ -411,8 +752,6 @@ export default function TeacherPanelPage() {
                 {assigning ? 'Atanıyor...' : 'Ödev Ata'}
               </button>
             </div>
-
-            {/* Test Listesi */}
             {bookChapters.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {bookChapters.map(chapter => {
@@ -478,9 +817,6 @@ export default function TeacherPanelPage() {
                       {lv && student?.grade_level && (
                         <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '5px', background: lv.bg, color: lv.color }}>{student.grade_level}. Sınıf</span>
                       )}
-                      {student?.classroom_name && (
-                        <span style={{ fontSize: '10px', padding: '1px 5px', borderRadius: '5px', background: '#F0F4F9', color: '#4A6080', fontWeight: 600 }}>{student.classroom_name}</span>
-                      )}
                     </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', flexShrink: 0 }}>
@@ -488,56 +824,8 @@ export default function TeacherPanelPage() {
                       {isDone ? 'Tamam' : isLate ? 'Gecikti' : 'Bekliyor'}
                     </span>
                     {isDone && (
-                      <button onClick={() => resetHomework(h.id)} style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid #BFDBFE', background: '#EEF3FB', color: '#1B3A6B', fontSize: '10px', cursor: 'pointer' }}>
-                        Sıfırla
-                      </button>
+                      <button onClick={() => resetHomework(h.id)} style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid #BFDBFE', background: '#EEF3FB', color: '#1B3A6B', fontSize: '10px', cursor: 'pointer' }}>Sıfırla</button>
                     )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {/* ÖĞRENCİLER */}
-        {activeTab === 'students' && (
-          <div>
-            <div style={{ fontSize: '16px', fontWeight: 700, color: '#1B3A6B', marginBottom: '14px' }}>👨‍🎓 Öğrencilerim ({students.length})</div>
-            {students.length === 0 ? (
-              <div style={{ background: '#FDF4E7', border: '1px solid #FED7AA', borderRadius: '12px', padding: '32px', textAlign: 'center', color: '#B45309' }}>Henüz öğrenci yok</div>
-            ) : students.map(s => {
-              const sHw = homework.filter(h => h.student_id === s.id)
-              const sLessons = lessons.filter(l => l.student_id === s.id)
-              const lv = s.grade_level ? getLevelStyle(s.grade_level) : null
-              return (
-                <div key={s.id} style={{ background: '#fff', borderRadius: '14px', padding: '14px', marginBottom: '10px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: lv ? lv.bg : '#E2EAF8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700, color: lv ? lv.color : '#1B3A6B', flexShrink: 0 }}>
-                      {s.full_name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#1B3A6B', marginBottom: '3px' }}>{s.full_name}</div>
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                        {lv && s.grade_level && (
-                          <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '5px', background: lv.bg, color: lv.color }}>{s.grade_level}. Sınıf</span>
-                        )}
-                        {s.classroom_name && (
-                          <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '5px', background: '#F0F4F9', color: '#4A6080', fontWeight: 600 }}>{s.classroom_name}</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '6px' }}>
-                    {[
-                      { label: 'Ders', value: sLessons.length, color: '#1B3A6B' },
-                      { label: 'Ödev', value: sHw.length, color: '#B45309' },
-                      { label: 'Tamam', value: sHw.filter(h => h.status === 'completed').length, color: '#2E7D52' },
-                    ].map(m => (
-                      <div key={m.label} style={{ background: '#F5F8FF', borderRadius: '8px', padding: '8px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '18px', fontWeight: 700, color: m.color }}>{m.value}</div>
-                        <div style={{ fontSize: '10px', color: '#7A8FA8' }}>{m.label}</div>
-                      </div>
-                    ))}
                   </div>
                 </div>
               )
