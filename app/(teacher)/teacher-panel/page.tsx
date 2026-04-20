@@ -13,6 +13,7 @@ export default function TeacherPanelPage() {
   const [homework, setHomework] = useState<any[]>([])
   const [books, setBooks] = useState<any[]>([])
   const [bookChapters, setBookChapters] = useState<any[]>([])
+  const [suspiciousItems, setSuspiciousItems] = useState<any[]>([])
   const [selectedBook, setSelectedBook] = useState('')
   const [selectedAssignStudent, setSelectedAssignStudent] = useState('')
   const [selectedTests, setSelectedTests] = useState<string[]>([])
@@ -24,7 +25,7 @@ export default function TeacherPanelPage() {
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
 
-  // Takvim state'leri
+  // Takvim
   const [calendarStudent, setCalendarStudent] = useState<any>(null)
   const [studentCalendar, setStudentCalendar] = useState<any[]>([])
   const [calendarNotes, setCalendarNotes] = useState<any[]>([])
@@ -68,25 +69,31 @@ export default function TeacherPanelPage() {
     const { data: p } = await supabase.from('profiles').select('*').eq('user_id', user.id).single()
     if (!p) { setLoading(false); return }
     setProfile(p)
+
     const { data: l } = await supabase.from('lessons').select('*, profiles!lessons_student_id_fkey(full_name)').eq('teacher_id', p.id).order('scheduled_at', { ascending: false })
     const { data: sub } = await supabase.from('subjects').select('*').order('name')
     const { data: bks } = await supabase.from('books').select('id, name, subject, color').order('name')
     const { data: s } = await supabase.from('profiles').select('id, full_name, grade_level, classroom_id').eq('role', 'student').order('grade_level', { ascending: true })
     const { data: classroomData } = await supabase.from('classrooms').select('id, name')
+    const { data: suspicious } = await supabase.from('study_calendar').select('*, profiles!study_calendar_student_id_fkey(full_name), subjects(name)').eq('is_suspicious', true).is('teacher_approved', null).order('completed_at', { ascending: false })
+
     const classroomMap: Record<string, string> = {}
     for (const c of classroomData ?? []) classroomMap[c.id] = c.name
     const studentsData = (s ?? []).map(st => ({ ...st, classroom_name: st.classroom_id ? (classroomMap[st.classroom_id] ?? null) : null }))
+
     const studentIds = studentsData.map((x: any) => x.id)
     let hw: any[] = []
     if (studentIds.length > 0) {
       const { data: hwData } = await supabase.from('homework_assignments').select('*, profiles!homework_assignments_student_id_fkey(full_name), tests(name, chapters(name, books(name)))').in('student_id', studentIds).order('created_at', { ascending: false })
       hw = hwData ?? []
     }
+
     setLessons(l ?? [])
     setStudents(studentsData)
     setSubjects(sub ?? [])
     setBooks(bks ?? [])
     setHomework(hw)
+    setSuspiciousItems(suspicious ?? [])
     setLoading(false)
   }
 
@@ -122,6 +129,12 @@ export default function TeacherPanelPage() {
     await loadStudentCalendar(s.id)
     setNoteSuccess(false)
     setShowAddForm(false)
+  }
+
+  async function approveItem(id: string, approved: boolean) {
+    await supabase.from('study_calendar').update({ teacher_approved: approved }).eq('id', id)
+    setSuspiciousItems(prev => prev.filter(x => x.id !== id))
+    if (calendarStudent) await loadStudentCalendar(calendarStudent.id)
   }
 
   async function saveNote(e: React.FormEvent) {
@@ -252,17 +265,12 @@ export default function TeacherPanelPage() {
     return { color: '#6B4FC8', bg: '#F0ECFB' }
   }
 
-  function getWeekDays(startDate: Date) {
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(startDate)
-      d.setDate(startDate.getDate() + i)
-      return d
-    })
+  function getWeekDays(start: Date) {
+    return Array.from({ length: 7 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d })
   }
 
   function getMonthDays(date: Date) {
-    const year = date.getFullYear()
-    const month = date.getMonth()
+    const year = date.getFullYear(), month = date.getMonth()
     const firstDay = new Date(year, month, 1)
     const lastDay = new Date(year, month + 1, 0)
     const startPad = (firstDay.getDay() + 6) % 7
@@ -272,9 +280,9 @@ export default function TeacherPanelPage() {
     return days
   }
 
-  function dateStr(d: Date) { return d.toISOString().slice(0, 10) }
-  function getCalForDate(ds: string) { return studentCalendar.filter(c => c.calendar_date === ds) }
-  function getNoteForDate(ds: string) { return calendarNotes.find(n => n.calendar_date === ds) }
+  function dstr(d: Date) { return d.toISOString().slice(0, 10) }
+  function getCalForDate(dateStr: string) { return studentCalendar.filter(c => c.calendar_date === dateStr) }
+  function getNoteForDate(dateStr: string) { return calendarNotes.find(n => n.calendar_date === dateStr) }
 
   const weekDays = getWeekDays(currentWeekStart)
   const monthDays = getMonthDays(currentMonth)
@@ -290,8 +298,7 @@ export default function TeacherPanelPage() {
     insufficient: { bg: '#FEF2F2', color: '#C0392B', label: '✗ Yetersiz' },
   }
 
-  const today = new Date()
-  const upcomingLessons = lessons.filter(l => new Date(l.scheduled_at) >= today && l.status === 'scheduled').slice(0, 5)
+  const upcomingLessons = lessons.filter(l => new Date(l.scheduled_at) >= new Date() && l.status === 'scheduled').slice(0, 5)
   const total = form.correct_count + form.wrong_count + form.blank_count
   const accuracy = total > 0 ? Math.round(form.correct_count / total * 100) : 0
 
@@ -327,30 +334,42 @@ export default function TeacherPanelPage() {
             <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)' }}>Öğretmen — {profile?.full_name?.split(' ')[0]}</div>
           </div>
         </div>
-        <button onClick={signOut} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: '8px', padding: '6px 10px', color: '#fff', fontSize: '12px', cursor: 'pointer' }}>Çıkış</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {suspiciousItems.length > 0 && (
+            <div style={{ background: '#C0392B', borderRadius: '20px', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ fontSize: '12px' }}>🚨</span>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: '#fff' }}>{suspiciousItems.length}</span>
+            </div>
+          )}
+          <button onClick={signOut} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: '8px', padding: '6px 10px', color: '#fff', fontSize: '12px', cursor: 'pointer' }}>Çıkış</button>
+        </div>
       </div>
 
       {/* Alt Tab Bar */}
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid #E2EAF8', display: 'flex', zIndex: 100, paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {TABS.map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ flex: 1, padding: '8px 4px 10px', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ flex: 1, padding: '8px 4px 10px', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', position: 'relative' }}>
             <span style={{ fontSize: '18px' }}>{tab.icon}</span>
             <span style={{ fontSize: '9px', fontWeight: activeTab === tab.id ? 700 : 500, color: activeTab === tab.id ? '#2E7D52' : '#9CA3AF' }}>{tab.label}</span>
             {activeTab === tab.id && <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#2E7D52' }} />}
+            {tab.id === 'dashboard' && suspiciousItems.length > 0 && (
+              <div style={{ position: 'absolute', top: '4px', right: '8px', width: '8px', height: '8px', borderRadius: '50%', background: '#C0392B' }} />
+            )}
           </button>
         ))}
       </div>
 
       <div style={{ padding: '16px 16px 80px' }}>
 
-        {/* ANA SAYFA */}
+        {/* ── ANA SAYFA ── */}
         {activeTab === 'dashboard' && (
           <div>
             <div style={{ background: 'linear-gradient(135deg, #2E7D52 0%, #10B981 100%)', borderRadius: '16px', padding: '18px', marginBottom: '14px', color: '#fff' }}>
               <div style={{ fontSize: '18px', fontWeight: 800, marginBottom: '4px' }}>Merhaba, {profile?.full_name?.split(' ')[0]}! 👋</div>
               <div style={{ fontSize: '12px', opacity: 0.8 }}>{new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: '10px', marginBottom: '16px' }}>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: '10px', marginBottom: '14px' }}>
               {[
                 { label: 'Toplam Öğrenci', value: students.length, icon: '👨‍🎓', color: '#1B3A6B', bg: '#EEF3FB' },
                 { label: 'Yaklaşan Ders', value: upcomingLessons.length, icon: '📅', color: '#2E7D52', bg: '#EAF4EE' },
@@ -366,8 +385,42 @@ export default function TeacherPanelPage() {
                 </div>
               ))}
             </div>
+
+            {/* Şüpheli tamamlamalar */}
+            {suspiciousItems.length > 0 && (
+              <div style={{ background: '#FEF2F2', borderRadius: '14px', overflow: 'hidden', marginBottom: '14px', border: '1px solid #FECACA' }}>
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid #FEE2E2', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '18px' }}>🚨</span>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#C0392B' }}>Şüpheli Tamamlamalar ({suspiciousItems.length})</div>
+                </div>
+                {suspiciousItems.map((item, i) => (
+                  <div key={item.id} style={{ padding: '12px 16px', borderBottom: i < suspiciousItems.length - 1 ? '1px solid #FEE2E2' : 'none', background: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#1B3A6B' }}>{item.profiles?.full_name}</div>
+                      <div style={{ fontSize: '11px', color: '#7A8FA8', marginTop: '2px' }}>{item.title} · {item.subjects?.name}</div>
+                      {item.suspicion_reason && (
+                        <div style={{ fontSize: '10px', color: '#C0392B', marginTop: '3px' }}>⚠ {item.suspicion_reason}</div>
+                      )}
+                      {item.actual_duration_minutes && (
+                        <div style={{ fontSize: '10px', color: '#7A8FA8', marginTop: '2px' }}>Bildirilen süre: {item.actual_duration_minutes} dk</div>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                      <button onClick={() => approveItem(item.id, true)} style={{ padding: '6px 10px', borderRadius: '8px', background: '#EAF4EE', color: '#2E7D52', fontSize: '12px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
+                        ✓ Onayla
+                      </button>
+                      <button onClick={() => approveItem(item.id, false)} style={{ padding: '6px 10px', borderRadius: '8px', background: '#FEF2F2', color: '#C0392B', fontSize: '12px', fontWeight: 700, border: '1px solid #FECACA', cursor: 'pointer' }}>
+                        ✗ Reddet
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Yaklaşan dersler */}
             {upcomingLessons.length > 0 && (
-              <div style={{ background: '#fff', borderRadius: '14px', overflow: 'hidden', marginBottom: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+              <div style={{ background: '#fff', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
                 <div style={{ padding: '12px 16px', borderBottom: '1px solid #F0F4F9', fontSize: '13px', fontWeight: 700, color: '#1B3A6B' }}>📅 Yaklaşan Dersler</div>
                 {upcomingLessons.map((l, i) => (
                   <div key={l.id} style={{ padding: '12px 16px', borderBottom: i < upcomingLessons.length - 1 ? '1px solid #F0F4F9' : 'none', display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -387,12 +440,11 @@ export default function TeacherPanelPage() {
           </div>
         )}
 
-        {/* TAKVİM YÖNETİMİ */}
+        {/* ── TAKVİM ── */}
         {activeTab === 'calendar' && (
           <div>
             <div style={{ fontSize: '16px', fontWeight: 700, color: '#1B3A6B', marginBottom: '14px' }}>🗓 Çalışma Takvimi Yönetimi</div>
 
-            {/* Öğrenci Seçimi */}
             <div style={{ background: '#fff', borderRadius: '12px', padding: '14px', marginBottom: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
               <label style={lbl}>Öğrenci Seç</label>
               <select value={calendarStudent?.id ?? ''} onChange={e => {
@@ -415,7 +467,6 @@ export default function TeacherPanelPage() {
               </div>
             ) : (
               <div>
-                {/* Görünüm seçici */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                   <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B' }}>{calendarStudent.full_name}</div>
                   <div style={{ display: 'flex', gap: '4px', background: '#F0F4F9', borderRadius: '8px', padding: '3px' }}>
@@ -427,7 +478,6 @@ export default function TeacherPanelPage() {
                   </div>
                 </div>
 
-                {/* Haftalık */}
                 {calendarView === 'week' && (
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
@@ -439,14 +489,15 @@ export default function TeacherPanelPage() {
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '4px', marginBottom: '14px' }}>
                       {weekDays.map((day, i) => {
-                        const ds = dateStr(day)
-                        const items = getCalForDate(ds)
-                        const note = getNoteForDate(ds)
-                        const isToday = ds === todayStr
-                        const isSelected = ds === selectedCalDate
+                        const dateStr = dstr(day)
+                        const items = getCalForDate(dateStr)
+                        const note = getNoteForDate(dateStr)
+                        const isToday = dateStr === todayStr
+                        const isSelected = dateStr === selectedCalDate
                         const completedCount = items.filter(x => x.status === 'completed').length
+                        const hasSuspicious = items.some(x => x.is_suspicious && x.teacher_approved === null)
                         return (
-                          <button key={i} onClick={() => { setSelectedCalDate(ds); setShowAddForm(false); setNoteSuccess(false) }} style={{ padding: '7px 3px', borderRadius: '10px', border: '2px solid', borderColor: isSelected ? '#2E7D52' : isToday ? '#86EFAC' : '#E2EAF8', background: isSelected ? '#2E7D52' : isToday ? '#F0FFF4' : '#fff', cursor: 'pointer', textAlign: 'center' }}>
+                          <button key={i} onClick={() => { setSelectedCalDate(dateStr); setShowAddForm(false); setNoteSuccess(false) }} style={{ padding: '7px 3px', borderRadius: '10px', border: '2px solid', borderColor: isSelected ? '#2E7D52' : isToday ? '#86EFAC' : '#E2EAF8', background: isSelected ? '#2E7D52' : isToday ? '#F0FFF4' : '#fff', cursor: 'pointer', textAlign: 'center' }}>
                             <div style={{ fontSize: '9px', color: isSelected ? 'rgba(255,255,255,0.7)' : '#9CA3AF', marginBottom: '2px' }}>{DAYS_SHORT[i]}</div>
                             <div style={{ fontSize: '14px', fontWeight: 700, color: isSelected ? '#fff' : isToday ? '#2E7D52' : '#374151' }}>{day.getDate()}</div>
                             {items.length > 0 && (
@@ -456,7 +507,8 @@ export default function TeacherPanelPage() {
                                 ))}
                               </div>
                             )}
-                            {note && <div style={{ fontSize: '10px', marginTop: '2px' }}>{note.evaluation === 'good' ? '✓' : note.evaluation === 'warning' ? '⚠' : '✗'}</div>}
+                            {hasSuspicious && <div style={{ fontSize: '9px', marginTop: '1px' }}>🚨</div>}
+                            {note && <div style={{ fontSize: '9px', marginTop: '1px' }}>{note.evaluation === 'good' ? '✓' : note.evaluation === 'warning' ? '⚠' : '✗'}</div>}
                           </button>
                         )
                       })}
@@ -464,7 +516,6 @@ export default function TeacherPanelPage() {
                   </div>
                 )}
 
-                {/* Aylık */}
                 {calendarView === 'month' && (
                   <div style={{ marginBottom: '14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
@@ -479,14 +530,15 @@ export default function TeacherPanelPage() {
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '3px' }}>
                         {monthDays.map((day, i) => {
                           if (!day) return <div key={i} />
-                          const ds = dateStr(day)
-                          const items = getCalForDate(ds)
-                          const note = getNoteForDate(ds)
-                          const isToday = ds === todayStr
-                          const isSelected = ds === selectedCalDate
+                          const dateStr = dstr(day)
+                          const items = getCalForDate(dateStr)
+                          const note = getNoteForDate(dateStr)
+                          const isToday = dateStr === todayStr
+                          const isSelected = dateStr === selectedCalDate
                           const completedCount = items.filter(x => x.status === 'completed').length
+                          const hasSuspicious = items.some(x => x.is_suspicious && x.teacher_approved === null)
                           return (
-                            <button key={i} onClick={() => { setSelectedCalDate(ds); setShowAddForm(false); setNoteSuccess(false) }} style={{ padding: '5px 2px', borderRadius: '8px', border: '2px solid', borderColor: isSelected ? '#2E7D52' : isToday ? '#86EFAC' : 'transparent', background: isSelected ? '#2E7D52' : isToday ? '#F0FFF4' : 'transparent', cursor: 'pointer', textAlign: 'center' }}>
+                            <button key={i} onClick={() => { setSelectedCalDate(dateStr); setShowAddForm(false); setNoteSuccess(false) }} style={{ padding: '5px 2px', borderRadius: '8px', border: '2px solid', borderColor: isSelected ? '#2E7D52' : isToday ? '#86EFAC' : 'transparent', background: isSelected ? '#2E7D52' : isToday ? '#F0FFF4' : 'transparent', cursor: 'pointer', textAlign: 'center' }}>
                               <div style={{ fontSize: '12px', fontWeight: isToday ? 800 : 500, color: isSelected ? '#fff' : '#374151' }}>{day.getDate()}</div>
                               {items.length > 0 && (
                                 <div style={{ display: 'flex', justifyContent: 'center', gap: '1px', marginTop: '2px' }}>
@@ -495,7 +547,8 @@ export default function TeacherPanelPage() {
                                   ))}
                                 </div>
                               )}
-                              {note && <div style={{ fontSize: '9px' }}>{note.evaluation === 'good' ? '✓' : note.evaluation === 'warning' ? '⚠' : '✗'}</div>}
+                              {hasSuspicious && <div style={{ fontSize: '8px' }}>🚨</div>}
+                              {note && <div style={{ fontSize: '8px' }}>{note.evaluation === 'good' ? '✓' : note.evaluation === 'warning' ? '⚠' : '✗'}</div>}
                             </button>
                           )
                         })}
@@ -515,7 +568,6 @@ export default function TeacherPanelPage() {
                     </button>
                   </div>
 
-                  {/* Görev ekleme formu */}
                   {showAddForm && (
                     <div style={{ padding: '14px 16px', background: '#F0FFF4', borderBottom: '1px solid #D1FAE5' }}>
                       <form onSubmit={saveCalItem}>
@@ -554,51 +606,56 @@ export default function TeacherPanelPage() {
                     </div>
                   )}
 
-                  {/* Mevcut görevler */}
                   {selectedCalItems.length === 0 && !showAddForm ? (
                     <div style={{ padding: '24px', textAlign: 'center', color: '#7A8FA8', fontSize: '13px' }}>Bu gün için görev yok</div>
                   ) : selectedCalItems.map((item, i) => {
                     const isDone = item.status === 'completed'
                     return (
-                      <div key={item.id} style={{ padding: '12px 16px', borderBottom: i < selectedCalItems.length - 1 ? '1px solid #F0F4F9' : 'none', display: 'flex', alignItems: 'center', gap: '12px', background: isDone ? '#F8FFF8' : '#fff' }}>
-                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: isDone ? '#10B981' : '#1B3A6B', flexShrink: 0 }} />
+                      <div key={item.id} style={{ padding: '12px 16px', borderBottom: i < selectedCalItems.length - 1 ? '1px solid #F0F4F9' : 'none', display: 'flex', alignItems: 'center', gap: '12px', background: isDone ? '#F8FFF8' : item.is_suspicious && item.teacher_approved === null ? '#FFFBF0' : '#fff' }}>
+                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: isDone ? (item.is_suspicious && item.teacher_approved === null ? '#B45309' : '#10B981') : '#1B3A6B', flexShrink: 0 }} />
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: '13px', fontWeight: 600, color: isDone ? '#7A8FA8' : '#1B3A6B', textDecoration: isDone ? 'line-through' : 'none' }}>{item.title}</div>
                           <div style={{ fontSize: '11px', color: '#7A8FA8' }}>
                             {item.subjects?.name}{item.topics?.name ? ' — ' + item.topics.name : ''} · {item.duration_minutes} dk
-                            {item.question_count > 0 ? ' · ' + item.question_count + ' soru' : ''}
                           </div>
+                          {isDone && item.is_suspicious && item.teacher_approved === null && (
+                            <div style={{ fontSize: '10px', color: '#B45309', marginTop: '2px' }}>🚨 Şüpheli — {item.suspicion_reason}</div>
+                          )}
+                          {isDone && item.teacher_approved === true && (
+                            <div style={{ fontSize: '10px', color: '#2E7D52', marginTop: '2px' }}>✓ Onaylandı · {item.score} puan</div>
+                          )}
+                          {isDone && item.teacher_approved === false && (
+                            <div style={{ fontSize: '10px', color: '#C0392B', marginTop: '2px' }}>✗ Reddedildi</div>
+                          )}
                         </div>
-                        {isDone && <span style={{ fontSize: '11px', fontWeight: 700, color: '#10B981' }}>✓ {item.score} puan</span>}
-                        {!isDone && (
-                          <button onClick={() => deleteCalItem(item.id)} style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #FECACA', background: '#FEF2F2', color: '#C0392B', fontSize: '11px', cursor: 'pointer' }}>Sil</button>
-                        )}
+                        {isDone && item.is_suspicious && item.teacher_approved === null ? (
+                          <div style={{ display: 'flex', gap: '5px', flexShrink: 0 }}>
+                            <button onClick={() => approveItem(item.id, true)} style={{ padding: '4px 8px', borderRadius: '6px', background: '#EAF4EE', color: '#2E7D52', fontSize: '11px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>✓</button>
+                            <button onClick={() => approveItem(item.id, false)} style={{ padding: '4px 8px', borderRadius: '6px', background: '#FEF2F2', color: '#C0392B', fontSize: '11px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>✗</button>
+                          </div>
+                        ) : !isDone ? (
+                          <button onClick={() => deleteCalItem(item.id)} style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #FECACA', background: '#FEF2F2', color: '#C0392B', fontSize: '11px', cursor: 'pointer', flexShrink: 0 }}>Sil</button>
+                        ) : null}
                       </div>
                     )
                   })}
                 </div>
 
-                {/* Değerlendirme & Not */}
+                {/* Not & Değerlendirme */}
                 <div style={{ background: '#fff', borderRadius: '14px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
                   <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B', marginBottom: '12px' }}>
-                    👨‍🏫 Değerlendirme & Not — {new Date(selectedCalDate + 'T12:00:00').toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })}
+                    👨‍🏫 Değerlendirme — {new Date(selectedCalDate + 'T12:00:00').toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })}
                   </div>
-
-                  {/* Mevcut not göster */}
                   {selectedCalNote && (
-                    <div style={{ background: evalStyle[selectedCalNote.evaluation]?.bg, borderRadius: '10px', padding: '12px', marginBottom: '12px', border: '1px solid rgba(0,0,0,0.06)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px', background: 'rgba(255,255,255,0.6)', color: evalStyle[selectedCalNote.evaluation]?.color }}>{evalStyle[selectedCalNote.evaluation]?.label}</span>
-                        <span style={{ fontSize: '10px', color: '#7A8FA8' }}>Mevcut not</span>
-                      </div>
-                      <div style={{ fontSize: '12.5px', color: '#374151', lineHeight: 1.6 }}>{selectedCalNote.note}</div>
+                    <div style={{ background: evalStyle[selectedCalNote.evaluation]?.bg, borderRadius: '10px', padding: '10px 12px', marginBottom: '12px', border: '1px solid rgba(0,0,0,0.06)' }}>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: evalStyle[selectedCalNote.evaluation]?.color, marginBottom: '4px' }}>{evalStyle[selectedCalNote.evaluation]?.label} — Mevcut not</div>
+                      <div style={{ fontSize: '12px', color: '#374151', lineHeight: 1.6 }}>{selectedCalNote.note}</div>
                     </div>
                   )}
-
                   <form onSubmit={saveNote}>
                     <div style={{ marginBottom: '10px' }}>
                       <label style={lbl}>Değerlendirme</label>
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ display: 'flex', gap: '6px' }}>
                         {[
                           { val: 'good', label: '✓ Yeterli', color: '#2E7D52', bg: '#EAF4EE' },
                           { val: 'warning', label: '⚠ Dikkat', color: '#B45309', bg: '#FDF4E7' },
@@ -612,15 +669,13 @@ export default function TeacherPanelPage() {
                     </div>
                     <div style={{ marginBottom: '12px' }}>
                       <label style={lbl}>Not / Yorum *</label>
-                      <textarea value={noteForm.note} onChange={e => setNoteForm(p => ({ ...p, note: e.target.value }))} placeholder="Öğrencinin bugünkü çalışması hakkında yorum ekleyin..." rows={3} style={{ ...inp, resize: 'vertical', fontFamily: 'inherit' }} required />
+                      <textarea value={noteForm.note} onChange={e => setNoteForm(p => ({ ...p, note: e.target.value }))} placeholder="Öğrencinin bugünkü çalışması hakkında yorum..." rows={3} style={{ ...inp, resize: 'vertical', fontFamily: 'inherit' }} required />
                     </div>
                     {noteSuccess && (
-                      <div style={{ background: '#EAF4EE', border: '1px solid #A7D9B8', borderRadius: '8px', padding: '10px', marginBottom: '10px', fontSize: '12.5px', fontWeight: 600, color: '#2E7D52' }}>
-                        ✓ Not kaydedildi!
-                      </div>
+                      <div style={{ background: '#EAF4EE', border: '1px solid #A7D9B8', borderRadius: '8px', padding: '10px', marginBottom: '10px', fontSize: '12.5px', fontWeight: 600, color: '#2E7D52' }}>✓ Not kaydedildi!</div>
                     )}
                     <button type="submit" disabled={savingNote} style={{ width: '100%', padding: '11px', borderRadius: '10px', background: '#1B3A6B', color: '#fff', fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
-                      {savingNote ? 'Kaydediliyor...' : selectedCalNote ? 'Notu Güncelle' : 'Not & Değerlendirme Kaydet'}
+                      {savingNote ? 'Kaydediliyor...' : selectedCalNote ? 'Notu Güncelle' : 'Not Kaydet'}
                     </button>
                   </form>
                 </div>
@@ -629,7 +684,7 @@ export default function TeacherPanelPage() {
           </div>
         )}
 
-        {/* SORU GİRİŞİ */}
+        {/* ── SORU GİRİŞİ ── */}
         {activeTab === 'questions' && (
           <div>
             <div style={{ fontSize: '16px', fontWeight: 700, color: '#1B3A6B', marginBottom: '14px' }}>✏️ Soru Çözüm Girişi</div>
@@ -713,7 +768,7 @@ export default function TeacherPanelPage() {
           </div>
         )}
 
-        {/* ÖDEV ATA */}
+        {/* ── ÖDEV ATA ── */}
         {activeTab === 'assign' && (
           <div>
             <div style={{ fontSize: '16px', fontWeight: 700, color: '#1B3A6B', marginBottom: '14px' }}>📋 Ödev Ata</div>
@@ -743,7 +798,7 @@ export default function TeacherPanelPage() {
                 </select>
               </div>
               {selectedTests.length > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: '#EEF3FB', borderRadius: '10px', marginBottom: '10px' }}>
+                <div style={{ padding: '10px 14px', background: '#EEF3FB', borderRadius: '10px', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#1B3A6B' }}>{selectedTests.length} test seçildi</span>
                   {assignSuccess && <span style={{ fontSize: '12px', color: '#2E7D52', fontWeight: 600 }}>✓ Atandı!</span>}
                 </div>
@@ -788,7 +843,7 @@ export default function TeacherPanelPage() {
           </div>
         )}
 
-        {/* ÖDEV TAKİBİ */}
+        {/* ── ÖDEV TAKİBİ ── */}
         {activeTab === 'homework' && (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
@@ -806,7 +861,7 @@ export default function TeacherPanelPage() {
               const student = students.find(s => s.id === h.student_id)
               const lv = student?.grade_level ? getLevelStyle(student.grade_level) : null
               return (
-                <div key={h.id} style={{ padding: '13px 14px', marginBottom: '8px', borderRadius: '14px', background: '#fff', border: '1px solid', borderColor: isDone ? '#D1FAE5' : isLate ? '#FECACA' : '#E2EAF8', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div key={h.id} style={{ padding: '13px 14px', marginBottom: '8px', borderRadius: '14px', background: '#fff', border: '1px solid', borderColor: isDone ? '#D1FAE5' : isLate ? '#FECACA' : '#E2EAF8', display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: isDone ? '#EAF4EE' : '#EEF3FB', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: isDone ? '#2E7D52' : '#1B3A6B', flexShrink: 0 }}>
                     {isDone ? '✓' : '—'}
                   </div>
@@ -832,6 +887,7 @@ export default function TeacherPanelPage() {
             })}
           </div>
         )}
+
       </div>
     </div>
   )
