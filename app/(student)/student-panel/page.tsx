@@ -4,22 +4,19 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-// ── TARİH YARDIMCISI (timezone-safe) ─────────────────────────
 function localDate(d: Date = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 }
 function getMonday(d: Date) {
   const date = new Date(d.getFullYear(), d.getMonth(), d.getDate())
   const day = date.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  date.setDate(date.getDate() + diff)
+  date.setDate(date.getDate() - day + (day === 0 ? -6 : 1))
   return date
 }
 function getWeekDays(start: Date) {
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i)
-    return d
-  })
+  return Array.from({ length: 7 }, (_, i) =>
+    new Date(start.getFullYear(), start.getMonth(), start.getDate() + i)
+  )
 }
 function getMonthDays(date: Date) {
   const year = date.getFullYear(), month = date.getMonth()
@@ -32,7 +29,6 @@ function getMonthDays(date: Date) {
   return days
 }
 
-// ── DOĞRULAMA MODALI ──────────────────────────────────────────
 function VerificationModal({ item, onVerified, onClose, supabase }: any) {
   const [step, setStep] = useState<'duration'|'question'|'done'>('duration')
   const [duration, setDuration] = useState('')
@@ -133,7 +129,6 @@ function VerificationModal({ item, onVerified, onClose, supabase }: any) {
   )
 }
 
-// ── ANA SAYFA ─────────────────────────────────────────────────
 export default function StudentPanelPage() {
   const [profile, setProfile] = useState<any>(null)
   const [topicPerf, setTopicPerf] = useState<any[]>([])
@@ -144,6 +139,7 @@ export default function StudentPanelPage() {
   const [goals, setGoals] = useState<any[]>([])
   const [calendar, setCalendar] = useState<any[]>([])
   const [calendarNotes, setCalendarNotes] = useState<any[]>([])
+  const [holidays, setHolidays] = useState<any[]>([])
   const [selectedDate, setSelectedDate] = useState(localDate())
   const [calendarView, setCalendarView] = useState<'week'|'month'>('week')
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => getMonday(new Date()))
@@ -155,7 +151,6 @@ export default function StudentPanelPage() {
   const [celebrationMsg, setCelebrationMsg] = useState('')
   const [newBadge, setNewBadge] = useState<any>(null)
   const supabase = createClient()
-
   const todayStr = localDate()
 
   useEffect(() => { load() }, [])
@@ -168,8 +163,10 @@ export default function StudentPanelPage() {
     setProfile(p)
     const prevBadgeCount = badges.length
 
-    const [{ data: tp }, { data: hw }, { data: st }, { data: sb },
-           { data: dt }, { data: g }, { data: cal }, { data: notes }] = await Promise.all([
+    const [
+      { data: tp }, { data: hw }, { data: st }, { data: sb },
+      { data: dt }, { data: g }, { data: cal }, { data: notes }, { data: hols }
+    ] = await Promise.all([
       supabase.from('student_topic_performance').select('*, topics(name), subjects(name)').eq('student_id', p.id).order('accuracy_rate', { ascending: true }),
       supabase.from('homework_assignments').select('*, tests(name, chapters(name, books(name)))').eq('student_id', p.id).order('created_at', { ascending: false }),
       supabase.from('student_streaks').select('*').eq('student_id', p.id).single(),
@@ -178,12 +175,12 @@ export default function StudentPanelPage() {
       supabase.from('student_goals').select('*').eq('student_id', p.id).eq('status', 'active'),
       supabase.from('study_calendar').select('*, subjects(name), topics(name)').eq('student_id', p.id).order('calendar_date'),
       supabase.from('calendar_notes').select('*, profiles!calendar_notes_teacher_id_fkey(full_name)').eq('student_id', p.id).order('calendar_date', { ascending: false }),
+      supabase.from('public_holidays').select('*').order('holiday_date'),
     ])
 
     setTopicPerf(tp ?? [])
     setHomework(hw ?? [])
     setStreak(st)
-    // Yeni rozet kontrolü
     const newBadges = sb ?? []
     if (newBadges.length > prevBadgeCount && prevBadgeCount > 0) {
       setNewBadge(newBadges[0])
@@ -194,6 +191,7 @@ export default function StudentPanelPage() {
     setGoals(g ?? [])
     setCalendar(cal ?? [])
     setCalendarNotes(notes ?? [])
+    setHolidays(hols ?? [])
     setLoading(false)
   }
 
@@ -222,16 +220,18 @@ export default function StudentPanelPage() {
 
   async function signOut() { await supabase.auth.signOut(); window.location.href = '/login' }
 
+  function getCalForDate(d: string) { return calendar.filter(c => c.calendar_date === d) }
+  function getNoteForDate(d: string) { return calendarNotes.find(n => n.calendar_date === d) }
+  function getHoliday(d: string) { return holidays.find(h => h.holiday_date === d) }
+
   const weekDays = getWeekDays(currentWeekStart)
   const monthDays = getMonthDays(currentMonth)
   const DAYS_SHORT = ['Pzt','Sal','Çar','Per','Cum','Cmt','Paz']
   const MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık']
 
-  function getCalForDate(d: string) { return calendar.filter(c => c.calendar_date === d) }
-  function getNoteForDate(d: string) { return calendarNotes.find(n => n.calendar_date === d) }
-
   const selectedItems = getCalForDate(selectedDate)
   const selectedNote = getNoteForDate(selectedDate)
+  const selectedHoliday = getHoliday(selectedDate)
   const totalQ = topicPerf.reduce((s,t)=>s+t.total_questions,0)
   const totalC = topicPerf.reduce((s,t)=>s+t.correct_count,0)
   const overallRate = totalQ>0 ? Math.round(totalC/totalQ*100) : 0
@@ -257,6 +257,12 @@ export default function StudentPanelPage() {
   }
   const feedback = fb()
 
+  const holidayLegend = [
+    { color:'#1B3A6B', bg:'#EEF3FB', label:'Resmi Tatil' },
+    { color:'#2E7D52', bg:'#EAF4EE', label:'Dini Bayram' },
+    { color:'#5B21B6', bg:'#EDE9FE', label:'Okul Tatili' },
+  ]
+
   const TABS = [
     { id:'today', label:'Bugün', icon:'📅' },
     { id:'calendar', label:'Takvim', icon:'🗓' },
@@ -278,10 +284,9 @@ export default function StudentPanelPage() {
   return (
     <div style={{ minHeight:'100vh', background:'#F0F4F9', fontFamily:'-apple-system, BlinkMacSystemFont, sans-serif' }}>
 
-      {/* Yeni Rozet */}
       {newBadge && (
         <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, display:'flex', alignItems:'center', justifyContent:'center', zIndex:1001, background:'rgba(0,0,0,0.5)', pointerEvents:'none' }}>
-          <div style={{ background:'#1B3A6B', borderRadius:'24px', padding:'32px 40px', textAlign:'center', boxShadow:'0 20px 60px rgba(0,0,0,0.4)' }}>
+          <div style={{ background:'#1B3A6B', borderRadius:'24px', padding:'32px 40px', textAlign:'center' }}>
             <div style={{ fontSize:'64px', marginBottom:'12px' }}>{newBadge.badges?.icon}</div>
             <div style={{ fontSize:'14px', color:'rgba(255,255,255,0.7)', marginBottom:'6px' }}>Yeni Rozet Kazandın!</div>
             <div style={{ fontSize:'22px', fontWeight:800, color:'#fff', marginBottom:'6px' }}>{newBadge.badges?.name}</div>
@@ -290,21 +295,13 @@ export default function StudentPanelPage() {
         </div>
       )}
 
-      {/* Doğrulama Modalı */}
       {verifyItem && (
         <VerificationModal item={verifyItem} supabase={supabase}
-          onVerified={async () => {
-            setVerifyItem(null)
-            setCelebrationMsg('Görev tamamlandı! 🎉')
-            setCelebration(true)
-            setTimeout(()=>setCelebration(false),3000)
-            await load()
-          }}
+          onVerified={async () => { setVerifyItem(null); setCelebrationMsg('Görev tamamlandı! 🎉'); setCelebration(true); setTimeout(()=>setCelebration(false),3000); await load() }}
           onClose={() => setVerifyItem(null)}
         />
       )}
 
-      {/* Kutlama */}
       {celebration && (
         <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, display:'flex', alignItems:'center', justifyContent:'center', zIndex:999, pointerEvents:'none', background:'rgba(0,0,0,0.3)' }}>
           <div style={{ background:'#1B3A6B', borderRadius:'20px', padding:'28px 40px', textAlign:'center' }}>
@@ -334,13 +331,12 @@ export default function StudentPanelPage() {
         </div>
       </div>
 
-      {/* Skor bar */}
       {streak && (
         <div style={{ background:'#fff', padding:'8px 16px', display:'flex', alignItems:'center', gap:'10px', borderBottom:'1px solid #F0F4F9' }}>
           <div style={{ flex:1, height:'6px', background:'#F0F4F9', borderRadius:'3px', overflow:'hidden' }}>
             <div style={{ height:'100%', width:dailyScore+'%', background:dailyScore>=75?'#2E7D52':dailyScore>=50?'#B45309':'#1B3A6B', borderRadius:'3px', transition:'width 0.5s' }} />
           </div>
-          <span style={{ fontSize:'11px', fontWeight:700, color:'#1B3A6B', flexShrink:0 }}>{dailyScore}/100</span>
+          <span style={{ fontSize:'11px', fontWeight:700, color:'#1B3A6B' }}>{dailyScore}/100</span>
           <span style={{ fontSize:'13px' }}>{feedback.emoji}</span>
         </div>
       )}
@@ -358,7 +354,7 @@ export default function StudentPanelPage() {
 
       <div style={{ padding:'16px 16px 80px' }}>
 
-        {/* ── BUGÜN ── */}
+        {/* BUGÜN */}
         {activeTab === 'today' && (
           <div>
             <div style={{ background:'linear-gradient(135deg, #1B3A6B 0%, #2563EB 100%)', borderRadius:'16px', padding:'18px', marginBottom:'14px', color:'#fff' }}>
@@ -398,7 +394,6 @@ export default function StudentPanelPage() {
               </div>
             )}
 
-            {/* Bugünün takvim görevleri */}
             {getCalForDate(todayStr).length > 0 && (
               <div style={{ background:'#fff', borderRadius:'14px', overflow:'hidden', marginBottom:'14px', boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
                 <div style={{ padding:'12px 16px', borderBottom:'1px solid #F0F4F9', display:'flex', alignItems:'center', gap:'8px' }}>
@@ -406,7 +401,7 @@ export default function StudentPanelPage() {
                   <div style={{ fontSize:'13px', fontWeight:700, color:'#1B3A6B' }}>Bugünün Çalışma Takvimi</div>
                 </div>
                 {getCalForDate(todayStr).map((item, i) => {
-                  const isDone = item.status === 'completed'
+                  const isDone = item.status==='completed'
                   return (
                     <div key={item.id} style={{ padding:'12px 16px', borderBottom:i<getCalForDate(todayStr).length-1?'1px solid #F0F4F9':'none', display:'flex', alignItems:'center', gap:'12px', background:isDone?'#F8FFF8':'#fff' }}>
                       <div style={{ width:'42px', height:'42px', borderRadius:'10px', background:isDone?'#EAF4EE':'#EEF3FB', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
@@ -415,9 +410,9 @@ export default function StudentPanelPage() {
                       <div style={{ flex:1 }}>
                         <div style={{ fontSize:'13px', fontWeight:700, color:isDone?'#7A8FA8':'#1B3A6B', textDecoration:isDone?'line-through':'none', marginBottom:'2px' }}>{item.title}</div>
                         <div style={{ fontSize:'11px', color:'#7A8FA8' }}>{item.subjects?.name}{item.topics?.name?' — '+item.topics.name:''}</div>
-                        {isDone && item.is_suspicious && item.teacher_approved===null && <div style={{ fontSize:'10px', color:'#B45309', marginTop:'2px' }}>⏳ Öğretmen onayı bekleniyor</div>}
-                        {isDone && item.teacher_approved===true && <div style={{ fontSize:'10px', color:'#2E7D52', marginTop:'2px' }}>✓ Öğretmen onayladı</div>}
-                        {isDone && item.teacher_approved===false && <div style={{ fontSize:'10px', color:'#C0392B', marginTop:'2px' }}>✗ Öğretmen reddetti — tekrar yap</div>}
+                        {isDone&&item.is_suspicious&&item.teacher_approved===null && <div style={{ fontSize:'10px', color:'#B45309', marginTop:'2px' }}>⏳ Öğretmen onayı bekleniyor</div>}
+                        {isDone&&item.teacher_approved===true && <div style={{ fontSize:'10px', color:'#2E7D52', marginTop:'2px' }}>✓ Öğretmen onayladı</div>}
+                        {isDone&&item.teacher_approved===false && <div style={{ fontSize:'10px', color:'#C0392B', marginTop:'2px' }}>✗ Öğretmen reddetti</div>}
                       </div>
                       {isDone ? (
                         <div style={{ textAlign:'center' }}>
@@ -433,7 +428,6 @@ export default function StudentPanelPage() {
               </div>
             )}
 
-            {/* Günlük Görevler */}
             <div style={{ background:'#fff', borderRadius:'16px', overflow:'hidden', marginBottom:'14px', boxShadow:'0 2px 12px rgba(0,0,0,0.06)' }}>
               <div style={{ padding:'14px 16px', borderBottom:'1px solid #F0F4F9', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                 <div style={{ fontSize:'14px', fontWeight:700, color:'#1B3A6B' }}>📋 Günlük Görevler</div>
@@ -441,17 +435,17 @@ export default function StudentPanelPage() {
                   {completedTasks}/{dailyTasks.length}
                 </span>
               </div>
-              {dailyTasks.length === 0 ? (
+              {dailyTasks.length===0 ? (
                 <div style={{ padding:'32px', textAlign:'center' }}>
                   <div style={{ fontSize:'32px', marginBottom:'8px' }}>🎉</div>
                   <div style={{ fontSize:'13px', fontWeight:600, color:'#2E7D52' }}>Bugün için görev yok!</div>
                 </div>
               ) : dailyTasks.map((task, i) => {
-                const isDone = task.status === 'completed'
+                const isDone = task.status==='completed'
                 return (
                   <div key={task.id} style={{ padding:'14px 16px', borderBottom:i<dailyTasks.length-1?'1px solid #F0F4F9':'none', display:'flex', alignItems:'center', gap:'12px', background:isDone?'#F8FFF8':'#fff' }}>
-                    <button onClick={() => !isDone && completeTask(task.id)} style={{ width:'44px', height:'44px', borderRadius:'50%', background:isDone?'#2E7D52':'#EEF3FB', border:isDone?'none':'2px solid #D5DFF0', display:'flex', alignItems:'center', justifyContent:'center', cursor:isDone?'default':'pointer', flexShrink:0, fontSize:'18px' }}>
-                      {isDone ? '✓' : '📖'}
+                    <button onClick={() => !isDone&&completeTask(task.id)} style={{ width:'44px', height:'44px', borderRadius:'50%', background:isDone?'#2E7D52':'#EEF3FB', border:isDone?'none':'2px solid #D5DFF0', display:'flex', alignItems:'center', justifyContent:'center', cursor:isDone?'default':'pointer', flexShrink:0, fontSize:'18px' }}>
+                      {isDone?'✓':'📖'}
                     </button>
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:'13px', fontWeight:700, color:isDone?'#7A8FA8':'#1B3A6B', textDecoration:isDone?'line-through':'none', marginBottom:'2px' }}>
@@ -472,7 +466,7 @@ export default function StudentPanelPage() {
               })}
             </div>
 
-            {pendingHw > 0 && (
+            {pendingHw>0 && (
               <div onClick={() => setActiveTab('homework')} style={{ background:'#FDF4E7', borderRadius:'12px', padding:'14px 16px', border:'1px solid #FED7AA', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
                   <span style={{ fontSize:'22px' }}>📝</span>
@@ -487,10 +481,10 @@ export default function StudentPanelPage() {
           </div>
         )}
 
-        {/* ── TAKVİM ── */}
+        {/* TAKVİM */}
         {activeTab === 'calendar' && (
           <div>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'14px' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px' }}>
               <div style={{ fontSize:'16px', fontWeight:700, color:'#1B3A6B' }}>🗓 Çalışma Takvimim</div>
               <div style={{ display:'flex', gap:'4px', background:'#F0F4F9', borderRadius:'8px', padding:'3px' }}>
                 {(['week','month'] as const).map(v => (
@@ -501,37 +495,51 @@ export default function StudentPanelPage() {
               </div>
             </div>
 
+            {/* Tatil açıklama bandı */}
+            <div style={{ display:'flex', gap:'10px', marginBottom:'10px', flexWrap:'wrap' }}>
+              {holidayLegend.map(h => (
+                <div key={h.label} style={{ display:'flex', alignItems:'center', gap:'5px' }}>
+                  <div style={{ width:'10px', height:'10px', borderRadius:'2px', background:h.bg, border:'1.5px solid '+h.color }} />
+                  <span style={{ fontSize:'10px', color:'#7A8FA8' }}>{h.label}</span>
+                </div>
+              ))}
+            </div>
+
             {calendarView === 'week' && (
               <div>
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
-                  <button onClick={() => setCurrentWeekStart(d => { const n=new Date(d); n.setDate(n.getDate()-7); return n })} style={{ padding:'6px 12px', borderRadius:'8px', border:'1px solid #D5DFF0', background:'#fff', cursor:'pointer', fontSize:'16px' }}>‹</button>
+                  <button onClick={() => setCurrentWeekStart(d => new Date(d.getFullYear(),d.getMonth(),d.getDate()-7))} style={{ padding:'6px 12px', borderRadius:'8px', border:'1px solid #D5DFF0', background:'#fff', cursor:'pointer', fontSize:'16px' }}>‹</button>
                   <span style={{ fontSize:'12px', fontWeight:700, color:'#1B3A6B' }}>
                     {currentWeekStart.toLocaleDateString('tr-TR', { day:'numeric', month:'short' })} — {weekDays[6].toLocaleDateString('tr-TR', { day:'numeric', month:'short' })}
                   </span>
-                  <button onClick={() => setCurrentWeekStart(d => { const n=new Date(d); n.setDate(n.getDate()+7); return n })} style={{ padding:'6px 12px', borderRadius:'8px', border:'1px solid #D5DFF0', background:'#fff', cursor:'pointer', fontSize:'16px' }}>›</button>
+                  <button onClick={() => setCurrentWeekStart(d => new Date(d.getFullYear(),d.getMonth(),d.getDate()+7))} style={{ padding:'6px 12px', borderRadius:'8px', border:'1px solid #D5DFF0', background:'#fff', cursor:'pointer', fontSize:'16px' }}>›</button>
                 </div>
                 <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:'4px', marginBottom:'14px' }}>
                   {weekDays.map((day, i) => {
                     const dateStr = localDate(day)
                     const items = getCalForDate(dateStr)
                     const note = getNoteForDate(dateStr)
-                    const isToday = dateStr === todayStr
-                    const isSelected = dateStr === selectedDate
+                    const holiday = getHoliday(dateStr)
+                    const isToday = dateStr===todayStr
+                    const isSelected = dateStr===selectedDate
+                    const isWeekend = i>=5
                     const completedCount = items.filter(x=>x.status==='completed').length
                     const hasSuspicious = items.some(x=>x.is_suspicious&&x.teacher_approved===null)
                     return (
-                      <button key={i} onClick={() => setSelectedDate(dateStr)} style={{ padding:'8px 3px', borderRadius:'10px', border:'2px solid', borderColor:isSelected?'#1B3A6B':isToday?'#93C5FD':'#E2EAF8', background:isSelected?'#1B3A6B':isToday?'#EEF3FB':'#fff', cursor:'pointer', textAlign:'center' }}>
+                      <button key={i} onClick={() => setSelectedDate(dateStr)}
+                        style={{ padding:'8px 3px', borderRadius:'10px', border:'2px solid', borderColor:isSelected?'#1B3A6B':holiday?holiday.color:isToday?'#93C5FD':'#E2EAF8', background:isSelected?'#1B3A6B':holiday?holiday.color+'25':isToday?'#EEF3FB':isWeekend?'#F8FAFC':'#fff', cursor:'pointer', textAlign:'center' }}>
                         <div style={{ fontSize:'9px', color:isSelected?'rgba(255,255,255,0.7)':'#9CA3AF', marginBottom:'2px' }}>{DAYS_SHORT[i]}</div>
-                        <div style={{ fontSize:'14px', fontWeight:700, color:isSelected?'#fff':isToday?'#1B3A6B':'#374151' }}>{day.getDate()}</div>
+                        <div style={{ fontSize:'14px', fontWeight:700, color:isSelected?'#fff':holiday&&!isToday?holiday.color:isToday?'#1B3A6B':'#374151' }}>{day.getDate()}</div>
+                        {holiday&&!isSelected && <div style={{ width:'6px', height:'2px', borderRadius:'1px', background:holiday.color, margin:'2px auto 0' }} />}
                         {items.length>0 && (
-                          <div style={{ display:'flex', justifyContent:'center', gap:'2px', marginTop:'3px' }}>
+                          <div style={{ display:'flex', justifyContent:'center', gap:'2px', marginTop:'2px' }}>
                             {items.slice(0,3).map((_,idx)=>(
                               <div key={idx} style={{ width:'5px', height:'5px', borderRadius:'50%', background:idx<completedCount?'#2E7D52':(isSelected?'rgba(255,255,255,0.5)':'#93C5FD') }} />
                             ))}
                           </div>
                         )}
-                        {hasSuspicious && <div style={{ fontSize:'9px', marginTop:'1px', color:'#B45309' }}>⏳</div>}
-                        {note && <div style={{ fontSize:'9px', marginTop:'1px' }}>{note.evaluation==='good'?'✓':note.evaluation==='warning'?'⚠':'✗'}</div>}
+                        {hasSuspicious && <div style={{ fontSize:'9px', marginTop:'1px' }}>⏳</div>}
+                        {note&&!hasSuspicious && <div style={{ width:'5px', height:'5px', borderRadius:'50%', background:note.evaluation==='good'?'#2E7D52':note.evaluation==='warning'?'#B45309':'#C0392B', margin:'2px auto 0' }} />}
                       </button>
                     )
                   })}
@@ -542,9 +550,9 @@ export default function StudentPanelPage() {
             {calendarView === 'month' && (
               <div style={{ marginBottom:'14px' }}>
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
-                  <button onClick={() => setCurrentMonth(d => new Date(d.getFullYear(), d.getMonth()-1, 1))} style={{ padding:'6px 12px', borderRadius:'8px', border:'1px solid #D5DFF0', background:'#fff', cursor:'pointer', fontSize:'16px' }}>‹</button>
+                  <button onClick={() => setCurrentMonth(d => new Date(d.getFullYear(),d.getMonth()-1,1))} style={{ padding:'6px 12px', borderRadius:'8px', border:'1px solid #D5DFF0', background:'#fff', cursor:'pointer', fontSize:'16px' }}>‹</button>
                   <span style={{ fontSize:'14px', fontWeight:700, color:'#1B3A6B' }}>{MONTHS[currentMonth.getMonth()]} {currentMonth.getFullYear()}</span>
-                  <button onClick={() => setCurrentMonth(d => new Date(d.getFullYear(), d.getMonth()+1, 1))} style={{ padding:'6px 12px', borderRadius:'8px', border:'1px solid #D5DFF0', background:'#fff', cursor:'pointer', fontSize:'16px' }}>›</button>
+                  <button onClick={() => setCurrentMonth(d => new Date(d.getFullYear(),d.getMonth()+1,1))} style={{ padding:'6px 12px', borderRadius:'8px', border:'1px solid #D5DFF0', background:'#fff', cursor:'pointer', fontSize:'16px' }}>›</button>
                 </div>
                 <div style={{ background:'#fff', borderRadius:'14px', padding:'12px', boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
                   <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:'2px', marginBottom:'6px' }}>
@@ -556,13 +564,15 @@ export default function StudentPanelPage() {
                       const dateStr = localDate(day)
                       const items = getCalForDate(dateStr)
                       const note = getNoteForDate(dateStr)
-                      const isToday = dateStr === todayStr
-                      const isSelected = dateStr === selectedDate
-                      const completedCount = items.filter(x=>x.status==='completed').length
+                      const holiday = getHoliday(dateStr)
+                      const isToday = dateStr===todayStr
+                      const isSelected = dateStr===selectedDate
                       const isWeekend = day.getDay()===0||day.getDay()===6
+                      const completedCount = items.filter(x=>x.status==='completed').length
                       return (
-                        <button key={i} onClick={() => setSelectedDate(dateStr)} style={{ padding:'5px 2px', borderRadius:'8px', border:'2px solid', borderColor:isSelected?'#1B3A6B':isToday?'#93C5FD':'transparent', background:isSelected?'#1B3A6B':isToday?'#EEF3FB':isWeekend?'#F8FAFC':'transparent', cursor:'pointer', textAlign:'center', minHeight:'36px' }}>
-                          <div style={{ fontSize:'12px', fontWeight:isToday?800:500, color:isSelected?'#fff':'#374151' }}>{day.getDate()}</div>
+                        <button key={i} onClick={() => setSelectedDate(dateStr)}
+                          style={{ padding:'5px 2px', borderRadius:'8px', border:'2px solid', borderColor:isSelected?'#1B3A6B':holiday?holiday.color:isToday?'#93C5FD':'transparent', background:isSelected?'#1B3A6B':holiday?holiday.color+'18':isToday?'#EEF3FB':isWeekend?'#F8FAFC':'transparent', cursor:'pointer', textAlign:'center', minHeight:'36px' }}>
+                          <div style={{ fontSize:'12px', fontWeight:isToday?800:500, color:isSelected?'#fff':holiday?holiday.color:'#374151' }}>{day.getDate()}</div>
                           {items.length>0 && (
                             <div style={{ display:'flex', justifyContent:'center', gap:'1px', marginTop:'2px' }}>
                               {items.slice(0,3).map((_,idx)=>(
@@ -570,7 +580,7 @@ export default function StudentPanelPage() {
                               ))}
                             </div>
                           )}
-                          {note && <div style={{ width:'5px', height:'5px', borderRadius:'50%', background:note.evaluation==='good'?'#2E7D52':note.evaluation==='warning'?'#B45309':'#C0392B', margin:'2px auto 0' }} />}
+                          {note && <div style={{ width:'4px', height:'4px', borderRadius:'50%', background:note.evaluation==='good'?'#2E7D52':note.evaluation==='warning'?'#B45309':'#C0392B', margin:'2px auto 0' }} />}
                         </button>
                       )
                     })}
@@ -581,12 +591,17 @@ export default function StudentPanelPage() {
 
             {/* Seçili gün detayı */}
             <div style={{ background:'#fff', borderRadius:'14px', overflow:'hidden', boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
-              <div style={{ padding:'12px 16px', background:'#F8FAFF', borderBottom:'1px solid #F0F4F9', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <div style={{ padding:'12px 16px', background:'#F8FAFF', borderBottom:'1px solid #F0F4F9' }}>
                 <div style={{ fontSize:'13px', fontWeight:700, color:'#1B3A6B' }}>
                   {new Date(selectedDate+'T12:00:00').toLocaleDateString('tr-TR', { weekday:'long', day:'numeric', month:'long' })}
                 </div>
+                {selectedHoliday && (
+                  <div style={{ fontSize:'11px', fontWeight:600, color:selectedHoliday.color, marginTop:'4px', padding:'4px 10px', background:selectedHoliday.color+'15', borderRadius:'6px', display:'inline-flex', alignItems:'center', gap:'5px' }}>
+                    🚩 {selectedHoliday.name}
+                  </div>
+                )}
                 {selectedNote && (
-                  <span style={{ fontSize:'11px', fontWeight:700, padding:'3px 10px', borderRadius:'20px', background:evalStyle[selectedNote.evaluation]?.bg, color:evalStyle[selectedNote.evaluation]?.color }}>
+                  <span style={{ fontSize:'11px', fontWeight:700, padding:'3px 10px', borderRadius:'20px', background:evalStyle[selectedNote.evaluation]?.bg, color:evalStyle[selectedNote.evaluation]?.color, display:'inline-block', marginTop:'4px' }}>
                     {evalStyle[selectedNote.evaluation]?.label}
                   </span>
                 )}
@@ -600,10 +615,12 @@ export default function StudentPanelPage() {
                   </div>
                 </div>
               )}
-              {selectedItems.length === 0 ? (
-                <div style={{ padding:'28px', textAlign:'center', color:'#7A8FA8', fontSize:'13px' }}>Bu gün için çalışma yok</div>
+              {selectedItems.length===0 ? (
+                <div style={{ padding:'28px', textAlign:'center', color:'#7A8FA8', fontSize:'13px' }}>
+                  {selectedHoliday ? selectedHoliday.name+' — Çalışma yok' : 'Bu gün için çalışma yok'}
+                </div>
               ) : selectedItems.map((item,i) => {
-                const isDone = item.status === 'completed'
+                const isDone = item.status==='completed'
                 return (
                   <div key={item.id} style={{ padding:'13px 16px', borderBottom:i<selectedItems.length-1?'1px solid #F0F4F9':'none', display:'flex', alignItems:'center', gap:'12px', background:isDone?'#F8FFF8':'#fff' }}>
                     <div style={{ width:'42px', height:'42px', borderRadius:'10px', background:isDone?'#EAF4EE':'#EEF3FB', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
@@ -612,9 +629,9 @@ export default function StudentPanelPage() {
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:'13px', fontWeight:700, color:isDone?'#7A8FA8':'#1B3A6B', textDecoration:isDone?'line-through':'none', marginBottom:'2px' }}>{item.title}</div>
                       <div style={{ fontSize:'11px', color:'#7A8FA8' }}>{item.subjects?.name}{item.topics?.name?' — '+item.topics.name:''}{item.question_count>0?' · '+item.question_count+' soru':''}</div>
-                      {isDone && item.is_suspicious && item.teacher_approved===null && <div style={{ fontSize:'10px', color:'#B45309', marginTop:'2px' }}>⏳ Öğretmen onayı bekleniyor</div>}
-                      {isDone && item.teacher_approved===true && <div style={{ fontSize:'10px', color:'#2E7D52', marginTop:'2px' }}>✓ Öğretmen onayladı</div>}
-                      {isDone && item.teacher_approved===false && <div style={{ fontSize:'10px', color:'#C0392B', marginTop:'2px' }}>✗ Öğretmen reddetti</div>}
+                      {isDone&&item.is_suspicious&&item.teacher_approved===null && <div style={{ fontSize:'10px', color:'#B45309', marginTop:'2px' }}>⏳ Öğretmen onayı bekleniyor</div>}
+                      {isDone&&item.teacher_approved===true && <div style={{ fontSize:'10px', color:'#2E7D52', marginTop:'2px' }}>✓ Öğretmen onayladı</div>}
+                      {isDone&&item.teacher_approved===false && <div style={{ fontSize:'10px', color:'#C0392B', marginTop:'2px' }}>✗ Öğretmen reddetti</div>}
                     </div>
                     {isDone ? (
                       <div style={{ textAlign:'center' }}>
@@ -633,7 +650,7 @@ export default function StudentPanelPage() {
           </div>
         )}
 
-        {/* ── PERFORMANS ── */}
+        {/* PERFORMANS */}
         {activeTab === 'performance' && (
           <div>
             <div style={{ fontSize:'16px', fontWeight:700, color:'#1B3A6B', marginBottom:'14px' }}>📊 Konu Performansım</div>
@@ -671,7 +688,7 @@ export default function StudentPanelPage() {
           </div>
         )}
 
-        {/* ── ÖDEVLER ── */}
+        {/* ÖDEVLER */}
         {activeTab === 'homework' && (
           <div>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px' }}>
@@ -704,7 +721,7 @@ export default function StudentPanelPage() {
           </div>
         )}
 
-        {/* ── HEDEFLER ── */}
+        {/* HEDEFLER */}
         {activeTab === 'goals' && (
           <div>
             <div style={{ fontSize:'16px', fontWeight:700, color:'#1B3A6B', marginBottom:'14px' }}>🎯 Hedeflerim</div>
@@ -714,7 +731,7 @@ export default function StudentPanelPage() {
                 <div style={{ fontSize:'13px', fontWeight:700, color:'#1B3A6B' }}>Henüz hedef belirlenmedi</div>
               </div>
             ) : goals.map(g => {
-              const progress = g.target_score>0 ? Math.min(Math.round((g.current_score/g.target_score)*100),100) : 0
+              const progress = g.target_score>0?Math.min(Math.round((g.current_score/g.target_score)*100),100):0
               const pColor = progress>=80?'#2E7D52':progress>=50?'#B45309':'#1B3A6B'
               return (
                 <div key={g.id} style={{ background:'#fff', borderRadius:'14px', padding:'18px', marginBottom:'10px', boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
@@ -741,7 +758,7 @@ export default function StudentPanelPage() {
           </div>
         )}
 
-        {/* ── SWOT ── */}
+        {/* SWOT */}
         {activeTab === 'swot' && (
           <div>
             <div style={{ fontSize:'16px', fontWeight:700, color:'#1B3A6B', marginBottom:'14px' }}>🔍 SWOT Analizim</div>
