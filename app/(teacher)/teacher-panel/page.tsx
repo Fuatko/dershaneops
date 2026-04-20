@@ -57,7 +57,10 @@ export default function TeacherPanelPage() {
   const [calendarStudent, setCalendarStudent] = useState<any>(null)
   const [studentCalendar, setStudentCalendar] = useState<any[]>([])
   const [calendarNotes, setCalendarNotes] = useState<any[]>([])
-  const [selectedCalDate, setSelectedCalDate] = useState(new Date().toISOString().slice(0, 10))
+  const [selectedCalDate, setSelectedCalDate] = useState(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  })
   const [calendarView, setCalendarView] = useState<'week' | 'month'>('week')
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(getMonday(new Date()))
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date())

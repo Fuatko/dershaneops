@@ -4,51 +4,52 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-// ─── DOĞRULAMA MODALI ───────────────────────────────────────
+// ── TARİH YARDIMCISI (timezone-safe) ─────────────────────────
+function localDate(d: Date = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+function getMonday(d: Date) {
+  const date = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  const day = date.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  date.setDate(date.getDate() + diff)
+  return date
+}
+function getWeekDays(start: Date) {
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i)
+    return d
+  })
+}
+function getMonthDays(date: Date) {
+  const year = date.getFullYear(), month = date.getMonth()
+  const firstDay = new Date(year, month, 1)
+  const lastDay = new Date(year, month + 1, 0)
+  const startPad = (firstDay.getDay() + 6) % 7
+  const days: (Date | null)[] = []
+  for (let i = 0; i < startPad; i++) days.push(null)
+  for (let i = 1; i <= lastDay.getDate(); i++) days.push(new Date(year, month, i))
+  return days
+}
+
+// ── DOĞRULAMA MODALI ──────────────────────────────────────────
 function VerificationModal({ item, onVerified, onClose, supabase }: any) {
-  const [step, setStep] = useState<'duration' | 'question' | 'done'>('duration')
+  const [step, setStep] = useState<'duration'|'question'|'done'>('duration')
   const [duration, setDuration] = useState('')
   const [question, setQuestion] = useState<any>(null)
   const [selectedAnswer, setSelectedAnswer] = useState('')
   const [saving, setSaving] = useState(false)
-  const [result, setResult] = useState<'correct' | 'wrong' | null>(null)
+  const [result, setResult] = useState<'correct'|'wrong'|null>(null)
 
   useEffect(() => { loadQuestion() }, [])
 
   async function loadQuestion() {
-    // 1. Önce konuya özel soru ara
-    if (item.topic_id && item.subject_id) {
-      const { data } = await supabase
-        .from('verification_questions')
-        .select('*')
-        .eq('subject_id', item.subject_id)
-        .limit(20)
-      if (data && data.length > 0) {
-        setQuestion(data[Math.floor(Math.random() * data.length)])
-        return
-      }
-    }
-    // 2. Derse özel soru ara
     if (item.subject_id) {
-      const { data } = await supabase
-        .from('verification_questions')
-        .select('*')
-        .eq('subject_id', item.subject_id)
-        .limit(20)
-      if (data && data.length > 0) {
-        setQuestion(data[Math.floor(Math.random() * data.length)])
-        return
-      }
+      const { data } = await supabase.from('verification_questions').select('*').eq('subject_id', item.subject_id).limit(20)
+      if (data && data.length > 0) { setQuestion(data[Math.floor(Math.random() * data.length)]); return }
     }
-    // 3. Son çare: subject_id null olan genel sorular
-    const { data } = await supabase
-      .from('verification_questions')
-      .select('*')
-      .is('subject_id', null)
-      .limit(10)
-    if (data && data.length > 0) {
-      setQuestion(data[Math.floor(Math.random() * data.length)])
-    }
+    const { data } = await supabase.from('verification_questions').select('*').is('subject_id', null).limit(10)
+    if (data && data.length > 0) setQuestion(data[Math.floor(Math.random() * data.length)])
   }
 
   async function submitVerification() {
@@ -61,15 +62,13 @@ function VerificationModal({ item, onVerified, onClose, supabase }: any) {
     if (isSuspicious) suspicionReason += 'Çok kısa sürede tamamlandı. '
     if (!isCorrect) suspicionReason += 'Doğrulama sorusunu yanlış yanıtladı.'
     await supabase.from('study_calendar').update({
-      status: 'completed',
-      completed_at: new Date().toISOString(),
+      status: 'completed', completed_at: new Date().toISOString(),
       actual_duration_minutes: durationMins,
       is_suspicious: isSuspicious || !isCorrect,
       suspicion_reason: suspicionReason || null,
       teacher_approved: isSuspicious || !isCorrect ? null : true,
-      verification_answer: selectedAnswer,
-      verification_score: isCorrect ? 100 : 0,
-      score: isCorrect ? Math.floor(Math.random() * 10) + 90 : Math.floor(Math.random() * 20) + 60,
+      verification_answer: selectedAnswer, verification_score: isCorrect ? 100 : 0,
+      score: isCorrect ? Math.floor(Math.random()*10)+90 : Math.floor(Math.random()*20)+60,
     }).eq('id', item.id)
     setResult(isCorrect ? 'correct' : 'wrong')
     setStep('done')
@@ -78,62 +77,54 @@ function VerificationModal({ item, onVerified, onClose, supabase }: any) {
   }
 
   return (
-    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-      <div style={{ background: '#fff', borderRadius: '20px', padding: '24px', maxWidth: '400px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
-
+    <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.55)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:'20px' }}>
+      <div style={{ background:'#fff', borderRadius:'20px', padding:'24px', maxWidth:'400px', width:'100%', boxShadow:'0 20px 60px rgba(0,0,0,0.3)' }}>
         {step === 'duration' && (
           <>
-            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-              <div style={{ fontSize: '40px', marginBottom: '10px' }}>⏱</div>
-              <div style={{ fontSize: '17px', fontWeight: 800, color: '#1B3A6B', marginBottom: '6px' }}>Ne kadar süre çalıştın?</div>
-              <div style={{ fontSize: '13px', color: '#7A8FA8' }}>Planlanan süre: {item.duration_minutes} dakika</div>
+            <div style={{ textAlign:'center', marginBottom:'20px' }}>
+              <div style={{ fontSize:'40px', marginBottom:'10px' }}>⏱</div>
+              <div style={{ fontSize:'17px', fontWeight:800, color:'#1B3A6B', marginBottom:'6px' }}>Ne kadar süre çalıştın?</div>
+              <div style={{ fontSize:'13px', color:'#7A8FA8' }}>Planlanan: {item.duration_minutes} dakika</div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '8px', marginBottom: '14px' }}>
-              {[15, 20, 30, 40, 45, 60].map(min => (
-                <button key={min} onClick={() => setDuration(String(min))} style={{ padding: '12px', borderRadius: '10px', border: '2px solid', borderColor: duration === String(min) ? '#1B3A6B' : '#E2EAF8', background: duration === String(min) ? '#1B3A6B' : '#F8FAFF', color: duration === String(min) ? '#fff' : '#1B3A6B', fontSize: '14px', fontWeight: 700, cursor: 'pointer' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'8px', marginBottom:'14px' }}>
+              {[15,20,30,40,45,60].map(min => (
+                <button key={min} onClick={() => setDuration(String(min))} style={{ padding:'12px', borderRadius:'10px', border:'2px solid', borderColor:duration===String(min)?'#1B3A6B':'#E2EAF8', background:duration===String(min)?'#1B3A6B':'#F8FAFF', color:duration===String(min)?'#fff':'#1B3A6B', fontSize:'14px', fontWeight:700, cursor:'pointer' }}>
                   {min} dk
                 </button>
               ))}
             </div>
-            <input type="number" min={1} max={180} value={duration} onChange={e => setDuration(e.target.value)} placeholder="Başka süre (dk)" style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid #D5DFF0', fontSize: '14px', color: '#1B3A6B', outline: 'none', boxSizing: 'border-box', marginBottom: '14px' }} />
-            <button onClick={() => duration ? setStep('question') : null} disabled={!duration} style={{ width: '100%', padding: '13px', borderRadius: '12px', background: duration ? '#1B3A6B' : '#D5DFF0', color: '#fff', fontSize: '14px', fontWeight: 700, border: 'none', cursor: duration ? 'pointer' : 'default' }}>
-              Devam →
-            </button>
-            <button onClick={onClose} style={{ width: '100%', marginTop: '8px', padding: '10px', borderRadius: '10px', background: 'transparent', color: '#9CA3AF', fontSize: '13px', border: 'none', cursor: 'pointer' }}>Vazgeç</button>
+            <input type="number" min={1} max={180} value={duration} onChange={e => setDuration(e.target.value)} placeholder="Başka süre (dk)" style={{ width:'100%', padding:'10px 14px', borderRadius:'10px', border:'1px solid #D5DFF0', fontSize:'14px', color:'#1B3A6B', outline:'none', boxSizing:'border-box', marginBottom:'14px' }} />
+            <button onClick={() => duration ? setStep('question') : null} disabled={!duration} style={{ width:'100%', padding:'13px', borderRadius:'12px', background:duration?'#1B3A6B':'#D5DFF0', color:'#fff', fontSize:'14px', fontWeight:700, border:'none', cursor:duration?'pointer':'default' }}>Devam →</button>
+            <button onClick={onClose} style={{ width:'100%', marginTop:'8px', padding:'10px', borderRadius:'10px', background:'transparent', color:'#9CA3AF', fontSize:'13px', border:'none', cursor:'pointer' }}>Vazgeç</button>
           </>
         )}
-
         {step === 'question' && question && (
           <>
-            <div style={{ textAlign: 'center', marginBottom: '18px' }}>
-              <div style={{ fontSize: '40px', marginBottom: '10px' }}>🧠</div>
-              <div style={{ fontSize: '17px', fontWeight: 800, color: '#1B3A6B', marginBottom: '6px' }}>Hızlı kontrol!</div>
-              <div style={{ fontSize: '13px', color: '#7A8FA8' }}>Aşağıdaki soruyu yanıtla</div>
+            <div style={{ textAlign:'center', marginBottom:'18px' }}>
+              <div style={{ fontSize:'40px', marginBottom:'10px' }}>🧠</div>
+              <div style={{ fontSize:'17px', fontWeight:800, color:'#1B3A6B', marginBottom:'6px' }}>Hızlı kontrol!</div>
             </div>
-            <div style={{ background: '#F8FAFF', borderRadius: '12px', padding: '14px', marginBottom: '14px', fontSize: '14px', fontWeight: 600, color: '#1B3A6B', lineHeight: 1.6 }}>
-              {question.question}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
-              {['A', 'B', 'C', 'D'].map(opt => (
-                <button key={opt} onClick={() => setSelectedAnswer(opt)} style={{ padding: '12px 16px', borderRadius: '10px', border: '2px solid', borderColor: selectedAnswer === opt ? '#1B3A6B' : '#E2EAF8', background: selectedAnswer === opt ? '#1B3A6B' : '#fff', color: selectedAnswer === opt ? '#fff' : '#374151', fontSize: '13px', fontWeight: selectedAnswer === opt ? 700 : 500, cursor: 'pointer', textAlign: 'left' }}>
-                  <strong>{opt})</strong> {question['option_' + opt.toLowerCase()]}
+            <div style={{ background:'#F8FAFF', borderRadius:'12px', padding:'14px', marginBottom:'14px', fontSize:'14px', fontWeight:600, color:'#1B3A6B', lineHeight:1.6 }}>{question.question}</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:'8px', marginBottom:'16px' }}>
+              {['A','B','C','D'].map(opt => (
+                <button key={opt} onClick={() => setSelectedAnswer(opt)} style={{ padding:'12px 16px', borderRadius:'10px', border:'2px solid', borderColor:selectedAnswer===opt?'#1B3A6B':'#E2EAF8', background:selectedAnswer===opt?'#1B3A6B':'#fff', color:selectedAnswer===opt?'#fff':'#374151', fontSize:'13px', fontWeight:selectedAnswer===opt?700:500, cursor:'pointer', textAlign:'left' }}>
+                  <strong>{opt})</strong> {question['option_'+opt.toLowerCase()]}
                 </button>
               ))}
             </div>
-            <button onClick={submitVerification} disabled={!selectedAnswer || saving} style={{ width: '100%', padding: '13px', borderRadius: '12px', background: selectedAnswer ? '#2E7D52' : '#D5DFF0', color: '#fff', fontSize: '14px', fontWeight: 700, border: 'none', cursor: selectedAnswer ? 'pointer' : 'default' }}>
+            <button onClick={submitVerification} disabled={!selectedAnswer||saving} style={{ width:'100%', padding:'13px', borderRadius:'12px', background:selectedAnswer?'#2E7D52':'#D5DFF0', color:'#fff', fontSize:'14px', fontWeight:700, border:'none', cursor:selectedAnswer?'pointer':'default' }}>
               {saving ? 'Kaydediliyor...' : 'Görevi Tamamla ✓'}
             </button>
           </>
         )}
-
         {step === 'done' && (
-          <div style={{ textAlign: 'center', padding: '10px 0' }}>
-            <div style={{ fontSize: '52px', marginBottom: '14px' }}>{result === 'correct' ? '🎉' : '📝'}</div>
-            <div style={{ fontSize: '18px', fontWeight: 800, color: result === 'correct' ? '#2E7D52' : '#B45309', marginBottom: '8px' }}>
-              {result === 'correct' ? 'Harika! Doğru yanıt!' : 'Kayıt edildi!'}
+          <div style={{ textAlign:'center', padding:'10px 0' }}>
+            <div style={{ fontSize:'52px', marginBottom:'14px' }}>{result==='correct'?'🎉':'📝'}</div>
+            <div style={{ fontSize:'18px', fontWeight:800, color:result==='correct'?'#2E7D52':'#B45309', marginBottom:'8px' }}>
+              {result==='correct' ? 'Harika! Doğru yanıt!' : 'Kayıt edildi!'}
             </div>
-            <div style={{ fontSize: '13px', color: '#7A8FA8' }}>
-              {result === 'correct' ? 'Görev başarıyla tamamlandı.' : 'Öğretmenin değerlendirmesini bekliyor.'}
+            <div style={{ fontSize:'13px', color:'#7A8FA8' }}>
+              {result==='correct' ? 'Görev başarıyla tamamlandı.' : 'Öğretmenin değerlendirmesini bekliyor.'}
             </div>
           </div>
         )}
@@ -142,37 +133,30 @@ function VerificationModal({ item, onVerified, onClose, supabase }: any) {
   )
 }
 
-// ─── ANA SAYFA ───────────────────────────────────────────────
+// ── ANA SAYFA ─────────────────────────────────────────────────
 export default function StudentPanelPage() {
   const [profile, setProfile] = useState<any>(null)
   const [topicPerf, setTopicPerf] = useState<any[]>([])
   const [homework, setHomework] = useState<any[]>([])
-  const [riskScore, setRiskScore] = useState(0)
   const [streak, setStreak] = useState<any>(null)
   const [badges, setBadges] = useState<any[]>([])
   const [dailyTasks, setDailyTasks] = useState<any[]>([])
   const [goals, setGoals] = useState<any[]>([])
   const [calendar, setCalendar] = useState<any[]>([])
   const [calendarNotes, setCalendarNotes] = useState<any[]>([])
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10))
-  const [calendarView, setCalendarView] = useState<'week' | 'month'>('week')
-  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(getMonday(new Date()))
-  const [currentMonth, setCurrentMonth] = useState<Date>(new Date())
+  const [selectedDate, setSelectedDate] = useState(localDate())
+  const [calendarView, setCalendarView] = useState<'week'|'month'>('week')
+  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => getMonday(new Date()))
+  const [currentMonth, setCurrentMonth] = useState<Date>(() => new Date())
   const [verifyItem, setVerifyItem] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('today')
   const [celebration, setCelebration] = useState(false)
   const [celebrationMsg, setCelebrationMsg] = useState('')
+  const [newBadge, setNewBadge] = useState<any>(null)
   const supabase = createClient()
 
-  function getMonday(d: Date) {
-    const date = new Date(d)
-    const day = date.getDay()
-    const diff = date.getDate() - day + (day === 0 ? -6 : 1)
-    date.setDate(diff)
-    date.setHours(0, 0, 0, 0)
-    return date
-  }
+  const todayStr = localDate()
 
   useEffect(() => { load() }, [])
 
@@ -182,15 +166,15 @@ export default function StudentPanelPage() {
     const { data: p } = await supabase.from('profiles').select('*').eq('user_id', user.id).single()
     if (!p) { setLoading(false); return }
     setProfile(p)
+    const prevBadgeCount = badges.length
 
-    const [{ data: tp }, { data: hw }, { data: risk }, { data: st }, { data: sb },
+    const [{ data: tp }, { data: hw }, { data: st }, { data: sb },
            { data: dt }, { data: g }, { data: cal }, { data: notes }] = await Promise.all([
       supabase.from('student_topic_performance').select('*, topics(name), subjects(name)').eq('student_id', p.id).order('accuracy_rate', { ascending: true }),
       supabase.from('homework_assignments').select('*, tests(name, chapters(name, books(name)))').eq('student_id', p.id).order('created_at', { ascending: false }),
-      supabase.rpc('calculate_risk_score', { p_student_id: p.id }),
       supabase.from('student_streaks').select('*').eq('student_id', p.id).single(),
-      supabase.from('student_badges').select('*, badges(*)').eq('student_id', p.id),
-      supabase.from('daily_tasks').select('*, subjects(name), topics(name)').eq('student_id', p.id).eq('task_date', new Date().toISOString().slice(0, 10)).order('status'),
+      supabase.from('student_badges').select('*, badges(*)').eq('student_id', p.id).order('earned_at', { ascending: false }),
+      supabase.from('daily_tasks').select('*, subjects(name), topics(name)').eq('student_id', p.id).eq('task_date', todayStr).order('status'),
       supabase.from('student_goals').select('*').eq('student_id', p.id).eq('status', 'active'),
       supabase.from('study_calendar').select('*, subjects(name), topics(name)').eq('student_id', p.id).order('calendar_date'),
       supabase.from('calendar_notes').select('*, profiles!calendar_notes_teacher_id_fkey(full_name)').eq('student_id', p.id).order('calendar_date', { ascending: false }),
@@ -198,9 +182,14 @@ export default function StudentPanelPage() {
 
     setTopicPerf(tp ?? [])
     setHomework(hw ?? [])
-    setRiskScore(risk ?? 0)
     setStreak(st)
-    setBadges(sb ?? [])
+    // Yeni rozet kontrolü
+    const newBadges = sb ?? []
+    if (newBadges.length > prevBadgeCount && prevBadgeCount > 0) {
+      setNewBadge(newBadges[0])
+      setTimeout(() => setNewBadge(null), 4000)
+    }
+    setBadges(newBadges)
     setDailyTasks(dt ?? [])
     setGoals(g ?? [])
     setCalendar(cal ?? [])
@@ -218,109 +207,97 @@ export default function StudentPanelPage() {
   async function completeTask(taskId: string) {
     const task = dailyTasks.find(t => t.id === taskId)
     if (!task) return
-    const score = Math.floor(Math.random() * 20) + 80
-    await supabase.from('daily_tasks').update({ status: 'completed', completed_at: new Date().toISOString(), score }).eq('id', taskId)
-    const today = new Date().toISOString().slice(0, 10)
+    const score = Math.floor(Math.random()*20)+80
+    await supabase.from('daily_tasks').update({ status:'completed', completed_at:new Date().toISOString(), score }).eq('id', taskId)
     if (streak) {
-      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
-      const newStreak = streak.last_active_date === today ? streak.current_streak : (streak.last_active_date === yesterday ? streak.current_streak + 1 : 1)
-      await supabase.from('student_streaks').update({ current_streak: newStreak, longest_streak: Math.max(newStreak, streak.longest_streak ?? 0), last_active_date: today, total_points: (streak.total_points ?? 0) + score, daily_score: Math.min((streak.daily_score ?? 0) + score, 100), updated_at: new Date().toISOString() }).eq('student_id', profile.id)
+      const yesterday = localDate(new Date(Date.now()-86400000))
+      const newStreak = streak.last_active_date === todayStr ? streak.current_streak : (streak.last_active_date === yesterday ? streak.current_streak+1 : 1)
+      await supabase.from('student_streaks').update({ current_streak:newStreak, longest_streak:Math.max(newStreak, streak.longest_streak??0), last_active_date:todayStr, total_points:(streak.total_points??0)+score, daily_score:Math.min((streak.daily_score??0)+score,100), updated_at:new Date().toISOString() }).eq('student_id', profile.id)
     }
-    const remaining = dailyTasks.filter(t => t.status === 'pending' && t.id !== taskId).length
-    if (remaining === 0) { setCelebrationMsg('Tüm görevleri tamamladın! 🎉'); setCelebration(true); setTimeout(() => setCelebration(false), 4000) }
-    else { setCelebrationMsg(score + ' puan kazandın! ⭐'); setCelebration(true); setTimeout(() => setCelebration(false), 2000) }
+    const remaining = dailyTasks.filter(t => t.status==='pending' && t.id!==taskId).length
+    if (remaining===0) { setCelebrationMsg('Tüm görevleri tamamladın! 🎉'); setCelebration(true); setTimeout(()=>setCelebration(false),4000) }
+    else { setCelebrationMsg(score+' puan kazandın! ⭐'); setCelebration(true); setTimeout(()=>setCelebration(false),2000) }
     await load()
   }
 
   async function signOut() { await supabase.auth.signOut(); window.location.href = '/login' }
 
-  // Takvim yardımcılar
-  function getWeekDays(start: Date) {
-    return Array.from({ length: 7 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d })
-  }
-  function getMonthDays(date: Date) {
-    const year = date.getFullYear(), month = date.getMonth()
-    const firstDay = new Date(year, month, 1)
-    const lastDay = new Date(year, month + 1, 0)
-    const startPad = (firstDay.getDay() + 6) % 7
-    const days: (Date | null)[] = []
-    for (let i = 0; i < startPad; i++) days.push(null)
-    for (let i = 1; i <= lastDay.getDate(); i++) days.push(new Date(year, month, i))
-    return days
-  }
-  function ds(d: Date) {
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    return `${y}-${m}-${day}`
-  }
-  function getCalForDate(dateStr: string) { return calendar.filter(c => c.calendar_date === dateStr) }
-  function getNoteForDate(dateStr: string) { return calendarNotes.find(n => n.calendar_date === dateStr) }
-
   const weekDays = getWeekDays(currentWeekStart)
   const monthDays = getMonthDays(currentMonth)
-  const todayStr = new Date().toISOString().slice(0, 10)
+  const DAYS_SHORT = ['Pzt','Sal','Çar','Per','Cum','Cmt','Paz']
+  const MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık']
+
+  function getCalForDate(d: string) { return calendar.filter(c => c.calendar_date === d) }
+  function getNoteForDate(d: string) { return calendarNotes.find(n => n.calendar_date === d) }
+
   const selectedItems = getCalForDate(selectedDate)
   const selectedNote = getNoteForDate(selectedDate)
-  const DAYS_SHORT = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz']
-  const MONTHS = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık']
-
-  const totalQ = topicPerf.reduce((s, t) => s + t.total_questions, 0)
-  const totalC = topicPerf.reduce((s, t) => s + t.correct_count, 0)
-  const overallRate = totalQ > 0 ? Math.round(totalC / totalQ * 100) : 0
-  const pendingHw = homework.filter(h => h.status !== 'completed').length
-  const completedTasks = dailyTasks.filter(t => t.status === 'completed').length
-  const dailyProgress = dailyTasks.length > 0 ? Math.round(completedTasks / dailyTasks.length * 100) : 0
+  const totalQ = topicPerf.reduce((s,t)=>s+t.total_questions,0)
+  const totalC = topicPerf.reduce((s,t)=>s+t.correct_count,0)
+  const overallRate = totalQ>0 ? Math.round(totalC/totalQ*100) : 0
+  const pendingHw = homework.filter(h=>h.status!=='completed').length
+  const completedTasks = dailyTasks.filter(t=>t.status==='completed').length
+  const dailyProgress = dailyTasks.length>0 ? Math.round(completedTasks/dailyTasks.length*100) : 0
   const dailyScore = streak?.daily_score ?? 0
-  const weakTopics = topicPerf.filter(t => t.accuracy_rate < 50)
-  const strongTopics = topicPerf.filter(t => t.accuracy_rate >= 70)
-  const midTopics = topicPerf.filter(t => t.accuracy_rate >= 50 && t.accuracy_rate < 70)
+  const weakTopics = topicPerf.filter(t=>t.accuracy_rate<50)
+  const strongTopics = topicPerf.filter(t=>t.accuracy_rate>=70)
+  const midTopics = topicPerf.filter(t=>t.accuracy_rate>=50&&t.accuracy_rate<70)
 
   const evalStyle: any = {
-    good: { bg: '#EAF4EE', color: '#2E7D52', label: '✓ Yeterli' },
-    warning: { bg: '#FDF4E7', color: '#B45309', label: '⚠ Dikkat' },
-    insufficient: { bg: '#FEF2F2', color: '#C0392B', label: '✗ Yetersiz' },
+    good: { bg:'#EAF4EE', color:'#2E7D52', label:'✓ Yeterli' },
+    warning: { bg:'#FDF4E7', color:'#B45309', label:'⚠ Dikkat' },
+    insufficient: { bg:'#FEF2F2', color:'#C0392B', label:'✗ Yetersiz' },
   }
 
   function fb() {
-    if (dailyScore >= 96) return { msg: 'Muhteşem! Sen bir yıldızsın!', color: '#B45309', bg: '#FDF4E7', emoji: '🌟' }
-    if (dailyScore >= 76) return { msg: 'Harika gidiyorsun!', color: '#2E7D52', bg: '#EAF4EE', emoji: '⭐' }
-    if (dailyScore >= 50) return { msg: 'İyi iş, devam et!', color: '#1B3A6B', bg: '#EEF3FB', emoji: '💪' }
-    return { msg: 'Bugün daha fazlasını yapabilirsin!', color: '#7A8FA8', bg: '#F0F4F9', emoji: '🎯' }
+    if (dailyScore>=96) return { msg:'Muhteşem! Sen bir yıldızsın!', color:'#B45309', bg:'#FDF4E7', emoji:'🌟' }
+    if (dailyScore>=76) return { msg:'Harika gidiyorsun!', color:'#2E7D52', bg:'#EAF4EE', emoji:'⭐' }
+    if (dailyScore>=50) return { msg:'İyi iş, devam et!', color:'#1B3A6B', bg:'#EEF3FB', emoji:'💪' }
+    return { msg:'Bugün daha fazlasını yapabilirsin!', color:'#7A8FA8', bg:'#F0F4F9', emoji:'🎯' }
   }
   const feedback = fb()
 
   const TABS = [
-    { id: 'today', label: 'Bugün', icon: '📅' },
-    { id: 'calendar', label: 'Takvim', icon: '🗓' },
-    { id: 'performance', label: 'Performans', icon: '📊' },
-    { id: 'homework', label: 'Ödevler', icon: '📚' },
-    { id: 'goals', label: 'Hedefler', icon: '🎯' },
-    { id: 'swot', label: 'SWOT', icon: '🔍' },
+    { id:'today', label:'Bugün', icon:'📅' },
+    { id:'calendar', label:'Takvim', icon:'🗓' },
+    { id:'performance', label:'Performans', icon:'📊' },
+    { id:'homework', label:'Ödevler', icon:'📚' },
+    { id:'goals', label:'Hedefler', icon:'🎯' },
+    { id:'swot', label:'SWOT', icon:'🔍' },
   ]
 
   if (loading) return (
-    <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', background: '#F0F4F9' }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: '40px', marginBottom: '12px' }}>📚</div>
-        <div style={{ fontSize: '14px', color: '#7A8FA8' }}>Yükleniyor...</div>
+    <div style={{ display:'flex', height:'100vh', alignItems:'center', justifyContent:'center', background:'#F0F4F9' }}>
+      <div style={{ textAlign:'center' }}>
+        <div style={{ fontSize:'40px', marginBottom:'12px' }}>📚</div>
+        <div style={{ fontSize:'14px', color:'#7A8FA8' }}>Yükleniyor...</div>
       </div>
     </div>
   )
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F0F4F9', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
+    <div style={{ minHeight:'100vh', background:'#F0F4F9', fontFamily:'-apple-system, BlinkMacSystemFont, sans-serif' }}>
+
+      {/* Yeni Rozet */}
+      {newBadge && (
+        <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, display:'flex', alignItems:'center', justifyContent:'center', zIndex:1001, background:'rgba(0,0,0,0.5)', pointerEvents:'none' }}>
+          <div style={{ background:'#1B3A6B', borderRadius:'24px', padding:'32px 40px', textAlign:'center', boxShadow:'0 20px 60px rgba(0,0,0,0.4)' }}>
+            <div style={{ fontSize:'64px', marginBottom:'12px' }}>{newBadge.badges?.icon}</div>
+            <div style={{ fontSize:'14px', color:'rgba(255,255,255,0.7)', marginBottom:'6px' }}>Yeni Rozet Kazandın!</div>
+            <div style={{ fontSize:'22px', fontWeight:800, color:'#fff', marginBottom:'6px' }}>{newBadge.badges?.name}</div>
+            <div style={{ fontSize:'13px', color:'rgba(255,255,255,0.6)' }}>{newBadge.badges?.description}</div>
+          </div>
+        </div>
+      )}
 
       {/* Doğrulama Modalı */}
       {verifyItem && (
-        <VerificationModal
-          item={verifyItem}
-          supabase={supabase}
+        <VerificationModal item={verifyItem} supabase={supabase}
           onVerified={async () => {
             setVerifyItem(null)
             setCelebrationMsg('Görev tamamlandı! 🎉')
             setCelebration(true)
-            setTimeout(() => setCelebration(false), 3000)
+            setTimeout(()=>setCelebration(false),3000)
             await load()
           }}
           onClose={() => setVerifyItem(null)}
@@ -329,135 +306,126 @@ export default function StudentPanelPage() {
 
       {/* Kutlama */}
       {celebration && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999, pointerEvents: 'none', background: 'rgba(0,0,0,0.3)' }}>
-          <div style={{ background: '#1B3A6B', borderRadius: '20px', padding: '28px 40px', textAlign: 'center' }}>
-            <div style={{ fontSize: '52px', marginBottom: '10px' }}>🎉</div>
-            <div style={{ fontSize: '20px', fontWeight: 800, color: '#fff' }}>{celebrationMsg}</div>
+        <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, display:'flex', alignItems:'center', justifyContent:'center', zIndex:999, pointerEvents:'none', background:'rgba(0,0,0,0.3)' }}>
+          <div style={{ background:'#1B3A6B', borderRadius:'20px', padding:'28px 40px', textAlign:'center' }}>
+            <div style={{ fontSize:'52px', marginBottom:'10px' }}>🎉</div>
+            <div style={{ fontSize:'20px', fontWeight:800, color:'#fff' }}>{celebrationMsg}</div>
           </div>
         </div>
       )}
 
       {/* Header */}
-      <div style={{ background: '#1B3A6B', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 800, color: '#fff' }}>D</div>
+      <div style={{ background:'#1B3A6B', padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', position:'sticky', top:0, zIndex:100 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+          <div style={{ width:'32px', height:'32px', borderRadius:'8px', background:'rgba(255,255,255,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'16px', fontWeight:800, color:'#fff' }}>D</div>
           <div>
-            <div style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>DershaneOPS</div>
-            <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.6)' }}>{profile?.full_name?.split(' ')[0]}</div>
+            <div style={{ fontSize:'13px', fontWeight:700, color:'#fff' }}>DershaneOPS</div>
+            <div style={{ fontSize:'10px', color:'rgba(255,255,255,0.6)' }}>{profile?.full_name?.split(' ')[0]}</div>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
           {streak && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(255,255,255,0.1)', padding: '5px 10px', borderRadius: '20px' }}>
-              <span style={{ fontSize: '14px' }}>🔥</span>
-              <span style={{ fontSize: '12px', fontWeight: 700, color: '#fff' }}>{streak.current_streak}</span>
+            <div style={{ display:'flex', alignItems:'center', gap:'4px', background:'rgba(255,255,255,0.1)', padding:'5px 10px', borderRadius:'20px' }}>
+              <span style={{ fontSize:'14px' }}>🔥</span>
+              <span style={{ fontSize:'12px', fontWeight:700, color:'#fff' }}>{streak.current_streak}</span>
             </div>
           )}
-          <button onClick={signOut} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '8px', padding: '6px 10px', color: '#fff', fontSize: '12px', cursor: 'pointer' }}>Çıkış</button>
+          <button onClick={signOut} style={{ background:'rgba(255,255,255,0.1)', border:'none', borderRadius:'8px', padding:'6px 10px', color:'#fff', fontSize:'12px', cursor:'pointer' }}>Çıkış</button>
         </div>
       </div>
 
-      {/* Günlük skor bar */}
+      {/* Skor bar */}
       {streak && (
-        <div style={{ background: '#fff', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid #F0F4F9' }}>
-          <div style={{ flex: 1, height: '6px', background: '#F0F4F9', borderRadius: '3px', overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: dailyScore + '%', background: dailyScore >= 75 ? '#2E7D52' : dailyScore >= 50 ? '#B45309' : '#1B3A6B', borderRadius: '3px', transition: 'width 0.5s' }} />
+        <div style={{ background:'#fff', padding:'8px 16px', display:'flex', alignItems:'center', gap:'10px', borderBottom:'1px solid #F0F4F9' }}>
+          <div style={{ flex:1, height:'6px', background:'#F0F4F9', borderRadius:'3px', overflow:'hidden' }}>
+            <div style={{ height:'100%', width:dailyScore+'%', background:dailyScore>=75?'#2E7D52':dailyScore>=50?'#B45309':'#1B3A6B', borderRadius:'3px', transition:'width 0.5s' }} />
           </div>
-          <span style={{ fontSize: '11px', fontWeight: 700, color: '#1B3A6B', flexShrink: 0 }}>{dailyScore}/100</span>
-          <span style={{ fontSize: '13px' }}>{feedback.emoji}</span>
+          <span style={{ fontSize:'11px', fontWeight:700, color:'#1B3A6B', flexShrink:0 }}>{dailyScore}/100</span>
+          <span style={{ fontSize:'13px' }}>{feedback.emoji}</span>
         </div>
       )}
 
       {/* Alt Tab Bar */}
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', borderTop: '1px solid #E2EAF8', display: 'flex', zIndex: 100, paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <div style={{ position:'fixed', bottom:0, left:0, right:0, background:'#fff', borderTop:'1px solid #E2EAF8', display:'flex', zIndex:100, paddingBottom:'env(safe-area-inset-bottom)' }}>
         {TABS.map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ flex: 1, padding: '8px 4px 10px', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-            <span style={{ fontSize: '18px' }}>{tab.icon}</span>
-            <span style={{ fontSize: '9px', fontWeight: activeTab === tab.id ? 700 : 500, color: activeTab === tab.id ? '#1B3A6B' : '#9CA3AF' }}>{tab.label}</span>
-            {activeTab === tab.id && <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#1B3A6B' }} />}
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ flex:1, padding:'8px 4px 10px', border:'none', background:'transparent', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:'2px' }}>
+            <span style={{ fontSize:'18px' }}>{tab.icon}</span>
+            <span style={{ fontSize:'9px', fontWeight:activeTab===tab.id?700:500, color:activeTab===tab.id?'#1B3A6B':'#9CA3AF' }}>{tab.label}</span>
+            {activeTab===tab.id && <div style={{ width:'4px', height:'4px', borderRadius:'50%', background:'#1B3A6B' }} />}
           </button>
         ))}
       </div>
 
-      {/* İçerik */}
-      <div style={{ padding: '16px 16px 80px' }}>
+      <div style={{ padding:'16px 16px 80px' }}>
 
         {/* ── BUGÜN ── */}
         {activeTab === 'today' && (
           <div>
-            <div style={{ background: 'linear-gradient(135deg, #1B3A6B 0%, #2563EB 100%)', borderRadius: '16px', padding: '18px', marginBottom: '14px', color: '#fff' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ background:'linear-gradient(135deg, #1B3A6B 0%, #2563EB 100%)', borderRadius:'16px', padding:'18px', marginBottom:'14px', color:'#fff' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
                 <div>
-                  <div style={{ fontSize: '18px', fontWeight: 800, marginBottom: '4px' }}>Merhaba, {profile?.full_name?.split(' ')[0]}! 👋</div>
-                  <div style={{ fontSize: '12px', opacity: 0.7 }}>{new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+                  <div style={{ fontSize:'18px', fontWeight:800, marginBottom:'4px' }}>Merhaba, {profile?.full_name?.split(' ')[0]}! 👋</div>
+                  <div style={{ fontSize:'12px', opacity:0.7 }}>{new Date().toLocaleDateString('tr-TR', { weekday:'long', day:'numeric', month:'long' })}</div>
                 </div>
-                <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.15)', borderRadius: '12px', padding: '8px 14px' }}>
-                  <div style={{ fontSize: '28px', fontWeight: 800 }}>{dailyProgress}%</div>
-                  <div style={{ fontSize: '10px', opacity: 0.7 }}>Bugün</div>
+                <div style={{ textAlign:'center', background:'rgba(255,255,255,0.15)', borderRadius:'12px', padding:'8px 14px' }}>
+                  <div style={{ fontSize:'28px', fontWeight:800 }}>{dailyProgress}%</div>
+                  <div style={{ fontSize:'10px', opacity:0.7 }}>Bugün</div>
                 </div>
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '10px', marginBottom: '14px' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'10px', marginBottom:'14px' }}>
               {[
-                { label: 'Seri', value: (streak?.current_streak ?? 0) + ' gün', icon: '🔥', color: '#B45309', bg: '#FDF4E7' },
-                { label: 'Puan', value: streak?.total_points ?? 0, icon: '💎', color: '#6B4FC8', bg: '#F0ECFB' },
-                { label: 'Rozet', value: badges.length, icon: '🏅', color: '#2E7D52', bg: '#EAF4EE' },
+                { label:'Seri', value:(streak?.current_streak??0)+' gün', icon:'🔥', color:'#B45309', bg:'#FDF4E7' },
+                { label:'Puan', value:streak?.total_points??0, icon:'💎', color:'#6B4FC8', bg:'#F0ECFB' },
+                { label:'Rozet', value:badges.length, icon:'🏅', color:'#2E7D52', bg:'#EAF4EE' },
               ].map(m => (
-                <div key={m.label} style={{ background: m.bg, borderRadius: '14px', padding: '14px 10px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '22px', marginBottom: '4px' }}>{m.icon}</div>
-                  <div style={{ fontSize: '16px', fontWeight: 800, color: m.color }}>{m.value}</div>
-                  <div style={{ fontSize: '10px', color: '#7A8FA8' }}>{m.label}</div>
+                <div key={m.label} style={{ background:m.bg, borderRadius:'14px', padding:'14px 10px', textAlign:'center' }}>
+                  <div style={{ fontSize:'22px', marginBottom:'4px' }}>{m.icon}</div>
+                  <div style={{ fontSize:'16px', fontWeight:800, color:m.color }}>{m.value}</div>
+                  <div style={{ fontSize:'10px', color:'#7A8FA8' }}>{m.label}</div>
                 </div>
               ))}
             </div>
 
             {streak && (
-              <div style={{ background: feedback.bg, borderRadius: '12px', padding: '12px 14px', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ fontSize: '24px' }}>{feedback.emoji}</span>
+              <div style={{ background:feedback.bg, borderRadius:'12px', padding:'12px 14px', marginBottom:'14px', display:'flex', alignItems:'center', gap:'10px' }}>
+                <span style={{ fontSize:'24px' }}>{feedback.emoji}</span>
                 <div>
-                  <div style={{ fontSize: '13px', fontWeight: 700, color: feedback.color }}>{feedback.msg}</div>
-                  <div style={{ fontSize: '11px', color: '#7A8FA8' }}>Günlük skor: {dailyScore}/100</div>
+                  <div style={{ fontSize:'13px', fontWeight:700, color:feedback.color }}>{feedback.msg}</div>
+                  <div style={{ fontSize:'11px', color:'#7A8FA8' }}>Günlük skor: {dailyScore}/100</div>
                 </div>
               </div>
             )}
 
             {/* Bugünün takvim görevleri */}
             {getCalForDate(todayStr).length > 0 && (
-              <div style={{ background: '#fff', borderRadius: '14px', overflow: 'hidden', marginBottom: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-                <div style={{ padding: '12px 16px', borderBottom: '1px solid #F0F4F9', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '16px' }}>🗓</span>
-                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B' }}>Bugünün Çalışma Takvimi</div>
+              <div style={{ background:'#fff', borderRadius:'14px', overflow:'hidden', marginBottom:'14px', boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
+                <div style={{ padding:'12px 16px', borderBottom:'1px solid #F0F4F9', display:'flex', alignItems:'center', gap:'8px' }}>
+                  <span style={{ fontSize:'16px' }}>🗓</span>
+                  <div style={{ fontSize:'13px', fontWeight:700, color:'#1B3A6B' }}>Bugünün Çalışma Takvimi</div>
                 </div>
                 {getCalForDate(todayStr).map((item, i) => {
                   const isDone = item.status === 'completed'
                   return (
-                    <div key={item.id} style={{ padding: '12px 16px', borderBottom: i < getCalForDate(todayStr).length - 1 ? '1px solid #F0F4F9' : 'none', display: 'flex', alignItems: 'center', gap: '12px', background: isDone ? '#F8FFF8' : '#fff' }}>
-                      <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: isDone ? '#EAF4EE' : '#EEF3FB', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        {isDone ? <span style={{ fontSize: '18px', color: '#2E7D52' }}>✓</span> : <><div style={{ fontSize: '12px', fontWeight: 800, color: '#1B3A6B' }}>{item.duration_minutes}</div><div style={{ fontSize: '8px', color: '#7A8FA8' }}>dk</div></>}
+                    <div key={item.id} style={{ padding:'12px 16px', borderBottom:i<getCalForDate(todayStr).length-1?'1px solid #F0F4F9':'none', display:'flex', alignItems:'center', gap:'12px', background:isDone?'#F8FFF8':'#fff' }}>
+                      <div style={{ width:'42px', height:'42px', borderRadius:'10px', background:isDone?'#EAF4EE':'#EEF3FB', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                        {isDone ? <span style={{ fontSize:'18px', color:'#2E7D52' }}>✓</span> : <><div style={{ fontSize:'12px', fontWeight:800, color:'#1B3A6B' }}>{item.duration_minutes}</div><div style={{ fontSize:'8px', color:'#7A8FA8' }}>dk</div></>}
                       </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '13px', fontWeight: 700, color: isDone ? '#7A8FA8' : '#1B3A6B', textDecoration: isDone ? 'line-through' : 'none', marginBottom: '2px' }}>{item.title}</div>
-                        <div style={{ fontSize: '11px', color: '#7A8FA8' }}>{item.subjects?.name}{item.topics?.name ? ' — ' + item.topics.name : ''}</div>
-                        {isDone && item.is_suspicious && item.teacher_approved === null && (
-                          <div style={{ fontSize: '10px', color: '#B45309', marginTop: '2px' }}>⏳ Öğretmen onayı bekleniyor</div>
-                        )}
-                        {isDone && item.teacher_approved === true && (
-                          <div style={{ fontSize: '10px', color: '#2E7D52', marginTop: '2px' }}>✓ Öğretmen onayladı</div>
-                        )}
-                        {isDone && item.teacher_approved === false && (
-                          <div style={{ fontSize: '10px', color: '#C0392B', marginTop: '2px' }}>✗ Öğretmen reddetti — tekrar yap</div>
-                        )}
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:'13px', fontWeight:700, color:isDone?'#7A8FA8':'#1B3A6B', textDecoration:isDone?'line-through':'none', marginBottom:'2px' }}>{item.title}</div>
+                        <div style={{ fontSize:'11px', color:'#7A8FA8' }}>{item.subjects?.name}{item.topics?.name?' — '+item.topics.name:''}</div>
+                        {isDone && item.is_suspicious && item.teacher_approved===null && <div style={{ fontSize:'10px', color:'#B45309', marginTop:'2px' }}>⏳ Öğretmen onayı bekleniyor</div>}
+                        {isDone && item.teacher_approved===true && <div style={{ fontSize:'10px', color:'#2E7D52', marginTop:'2px' }}>✓ Öğretmen onayladı</div>}
+                        {isDone && item.teacher_approved===false && <div style={{ fontSize:'10px', color:'#C0392B', marginTop:'2px' }}>✗ Öğretmen reddetti — tekrar yap</div>}
                       </div>
                       {isDone ? (
-                        <div style={{ textAlign: 'center' }}>
-                          <div style={{ fontSize: '16px', fontWeight: 800, color: '#2E7D52' }}>{item.score}</div>
-                          <div style={{ fontSize: '9px', color: '#7A8FA8' }}>puan</div>
+                        <div style={{ textAlign:'center' }}>
+                          <div style={{ fontSize:'16px', fontWeight:800, color:'#2E7D52' }}>{item.score}</div>
+                          <div style={{ fontSize:'9px', color:'#7A8FA8' }}>puan</div>
                         </div>
                       ) : (
-                        <button onClick={() => startCalendarItem(item.id)} style={{ padding: '8px 12px', borderRadius: '20px', background: '#1B3A6B', color: '#fff', fontSize: '12px', fontWeight: 700, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                          Yaptım!
-                        </button>
+                        <button onClick={() => startCalendarItem(item.id)} style={{ padding:'8px 12px', borderRadius:'20px', background:'#1B3A6B', color:'#fff', fontSize:'12px', fontWeight:700, border:'none', cursor:'pointer', whiteSpace:'nowrap' }}>Yaptım!</button>
                       )}
                     </div>
                   )
@@ -466,40 +434,38 @@ export default function StudentPanelPage() {
             )}
 
             {/* Günlük Görevler */}
-            <div style={{ background: '#fff', borderRadius: '16px', overflow: 'hidden', marginBottom: '14px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-              <div style={{ padding: '14px 16px', borderBottom: '1px solid #F0F4F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: '14px', fontWeight: 700, color: '#1B3A6B' }}>📋 Günlük Görevler</div>
-                <span style={{ fontSize: '12px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px', background: completedTasks === dailyTasks.length && dailyTasks.length > 0 ? '#EAF4EE' : '#EEF3FB', color: completedTasks === dailyTasks.length && dailyTasks.length > 0 ? '#2E7D52' : '#1B3A6B' }}>
+            <div style={{ background:'#fff', borderRadius:'16px', overflow:'hidden', marginBottom:'14px', boxShadow:'0 2px 12px rgba(0,0,0,0.06)' }}>
+              <div style={{ padding:'14px 16px', borderBottom:'1px solid #F0F4F9', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <div style={{ fontSize:'14px', fontWeight:700, color:'#1B3A6B' }}>📋 Günlük Görevler</div>
+                <span style={{ fontSize:'12px', fontWeight:700, padding:'3px 10px', borderRadius:'20px', background:completedTasks===dailyTasks.length&&dailyTasks.length>0?'#EAF4EE':'#EEF3FB', color:completedTasks===dailyTasks.length&&dailyTasks.length>0?'#2E7D52':'#1B3A6B' }}>
                   {completedTasks}/{dailyTasks.length}
                 </span>
               </div>
               {dailyTasks.length === 0 ? (
-                <div style={{ padding: '32px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '32px', marginBottom: '8px' }}>🎉</div>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#2E7D52' }}>Bugün için görev yok!</div>
+                <div style={{ padding:'32px', textAlign:'center' }}>
+                  <div style={{ fontSize:'32px', marginBottom:'8px' }}>🎉</div>
+                  <div style={{ fontSize:'13px', fontWeight:600, color:'#2E7D52' }}>Bugün için görev yok!</div>
                 </div>
               ) : dailyTasks.map((task, i) => {
                 const isDone = task.status === 'completed'
                 return (
-                  <div key={task.id} style={{ padding: '14px 16px', borderBottom: i < dailyTasks.length - 1 ? '1px solid #F0F4F9' : 'none', display: 'flex', alignItems: 'center', gap: '12px', background: isDone ? '#F8FFF8' : '#fff' }}>
-                    <button onClick={() => !isDone && completeTask(task.id)} style={{ width: '44px', height: '44px', borderRadius: '50%', background: isDone ? '#2E7D52' : '#EEF3FB', border: isDone ? 'none' : '2px solid #D5DFF0', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: isDone ? 'default' : 'pointer', flexShrink: 0, fontSize: '18px' }}>
+                  <div key={task.id} style={{ padding:'14px 16px', borderBottom:i<dailyTasks.length-1?'1px solid #F0F4F9':'none', display:'flex', alignItems:'center', gap:'12px', background:isDone?'#F8FFF8':'#fff' }}>
+                    <button onClick={() => !isDone && completeTask(task.id)} style={{ width:'44px', height:'44px', borderRadius:'50%', background:isDone?'#2E7D52':'#EEF3FB', border:isDone?'none':'2px solid #D5DFF0', display:'flex', alignItems:'center', justifyContent:'center', cursor:isDone?'default':'pointer', flexShrink:0, fontSize:'18px' }}>
                       {isDone ? '✓' : '📖'}
                     </button>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: isDone ? '#7A8FA8' : '#1B3A6B', textDecoration: isDone ? 'line-through' : 'none', marginBottom: '2px' }}>
-                        {task.subjects?.name ?? 'Genel'}{task.topics?.name ? ' — ' + task.topics.name : ''}
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:'13px', fontWeight:700, color:isDone?'#7A8FA8':'#1B3A6B', textDecoration:isDone?'line-through':'none', marginBottom:'2px' }}>
+                        {task.subjects?.name??'Genel'}{task.topics?.name?' — '+task.topics.name:''}
                       </div>
-                      <div style={{ fontSize: '11px', color: '#7A8FA8' }}>{task.target_duration_minutes} dk</div>
+                      <div style={{ fontSize:'11px', color:'#7A8FA8' }}>{task.target_duration_minutes} dk</div>
                     </div>
                     {isDone ? (
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '16px', fontWeight: 800, color: '#2E7D52' }}>{task.score}</div>
-                        <div style={{ fontSize: '9px', color: '#7A8FA8' }}>puan</div>
+                      <div style={{ textAlign:'center' }}>
+                        <div style={{ fontSize:'16px', fontWeight:800, color:'#2E7D52' }}>{task.score}</div>
+                        <div style={{ fontSize:'9px', color:'#7A8FA8' }}>puan</div>
                       </div>
                     ) : (
-                      <button onClick={() => completeTask(task.id)} style={{ padding: '8px 14px', borderRadius: '20px', background: '#1B3A6B', color: '#fff', fontSize: '12px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
-                        Yaptım!
-                      </button>
+                      <button onClick={() => completeTask(task.id)} style={{ padding:'8px 14px', borderRadius:'20px', background:'#1B3A6B', color:'#fff', fontSize:'12px', fontWeight:700, border:'none', cursor:'pointer' }}>Yaptım!</button>
                     )}
                   </div>
                 )
@@ -507,15 +473,15 @@ export default function StudentPanelPage() {
             </div>
 
             {pendingHw > 0 && (
-              <div onClick={() => setActiveTab('homework')} style={{ background: '#FDF4E7', borderRadius: '12px', padding: '14px 16px', border: '1px solid #FED7AA', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontSize: '22px' }}>📝</span>
+              <div onClick={() => setActiveTab('homework')} style={{ background:'#FDF4E7', borderRadius:'12px', padding:'14px 16px', border:'1px solid #FED7AA', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+                  <span style={{ fontSize:'22px' }}>📝</span>
                   <div>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#B45309' }}>{pendingHw} bekleyen ödev var</div>
-                    <div style={{ fontSize: '11px', color: '#7A8FA8' }}>Görmek için tıkla</div>
+                    <div style={{ fontSize:'13px', fontWeight:700, color:'#B45309' }}>{pendingHw} bekleyen ödev var</div>
+                    <div style={{ fontSize:'11px', color:'#7A8FA8' }}>Görmek için tıkla</div>
                   </div>
                 </div>
-                <span style={{ fontSize: '18px', color: '#B45309' }}>→</span>
+                <span style={{ fontSize:'18px', color:'#B45309' }}>→</span>
               </div>
             )}
           </div>
@@ -524,12 +490,12 @@ export default function StudentPanelPage() {
         {/* ── TAKVİM ── */}
         {activeTab === 'calendar' && (
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-              <div style={{ fontSize: '16px', fontWeight: 700, color: '#1B3A6B' }}>🗓 Çalışma Takvimim</div>
-              <div style={{ display: 'flex', gap: '4px', background: '#F0F4F9', borderRadius: '8px', padding: '3px' }}>
-                {(['week', 'month'] as const).map(v => (
-                  <button key={v} onClick={() => setCalendarView(v)} style={{ padding: '5px 12px', borderRadius: '6px', border: 'none', background: calendarView === v ? '#fff' : 'transparent', color: calendarView === v ? '#1B3A6B' : '#9CA3AF', fontSize: '12px', fontWeight: calendarView === v ? 700 : 500, cursor: 'pointer' }}>
-                    {v === 'week' ? 'Hafta' : 'Ay'}
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'14px' }}>
+              <div style={{ fontSize:'16px', fontWeight:700, color:'#1B3A6B' }}>🗓 Çalışma Takvimim</div>
+              <div style={{ display:'flex', gap:'4px', background:'#F0F4F9', borderRadius:'8px', padding:'3px' }}>
+                {(['week','month'] as const).map(v => (
+                  <button key={v} onClick={() => setCalendarView(v)} style={{ padding:'5px 12px', borderRadius:'6px', border:'none', background:calendarView===v?'#fff':'transparent', color:calendarView===v?'#1B3A6B':'#9CA3AF', fontSize:'12px', fontWeight:calendarView===v?700:500, cursor:'pointer' }}>
+                    {v==='week'?'Hafta':'Ay'}
                   </button>
                 ))}
               </div>
@@ -537,35 +503,35 @@ export default function StudentPanelPage() {
 
             {calendarView === 'week' && (
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                  <button onClick={() => { const d = new Date(currentWeekStart); d.setDate(d.getDate() - 7); setCurrentWeekStart(d) }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #D5DFF0', background: '#fff', cursor: 'pointer', fontSize: '16px' }}>‹</button>
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#1B3A6B' }}>
-                    {currentWeekStart.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })} — {weekDays[6].toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
+                  <button onClick={() => setCurrentWeekStart(d => { const n=new Date(d); n.setDate(n.getDate()-7); return n })} style={{ padding:'6px 12px', borderRadius:'8px', border:'1px solid #D5DFF0', background:'#fff', cursor:'pointer', fontSize:'16px' }}>‹</button>
+                  <span style={{ fontSize:'12px', fontWeight:700, color:'#1B3A6B' }}>
+                    {currentWeekStart.toLocaleDateString('tr-TR', { day:'numeric', month:'short' })} — {weekDays[6].toLocaleDateString('tr-TR', { day:'numeric', month:'short' })}
                   </span>
-                  <button onClick={() => { const d = new Date(currentWeekStart); d.setDate(d.getDate() + 7); setCurrentWeekStart(d) }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #D5DFF0', background: '#fff', cursor: 'pointer', fontSize: '16px' }}>›</button>
+                  <button onClick={() => setCurrentWeekStart(d => { const n=new Date(d); n.setDate(n.getDate()+7); return n })} style={{ padding:'6px 12px', borderRadius:'8px', border:'1px solid #D5DFF0', background:'#fff', cursor:'pointer', fontSize:'16px' }}>›</button>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '4px', marginBottom: '14px' }}>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:'4px', marginBottom:'14px' }}>
                   {weekDays.map((day, i) => {
-                    const dateStr = ds(day)
+                    const dateStr = localDate(day)
                     const items = getCalForDate(dateStr)
                     const note = getNoteForDate(dateStr)
                     const isToday = dateStr === todayStr
                     const isSelected = dateStr === selectedDate
-                    const completedCount = items.filter(x => x.status === 'completed').length
-                    const hasSuspicious = items.some(x => x.is_suspicious && x.teacher_approved === null)
+                    const completedCount = items.filter(x=>x.status==='completed').length
+                    const hasSuspicious = items.some(x=>x.is_suspicious&&x.teacher_approved===null)
                     return (
-                      <button key={i} onClick={() => setSelectedDate(dateStr)} style={{ padding: '8px 3px', borderRadius: '10px', border: '2px solid', borderColor: isSelected ? '#1B3A6B' : isToday ? '#93C5FD' : '#E2EAF8', background: isSelected ? '#1B3A6B' : isToday ? '#EEF3FB' : '#fff', cursor: 'pointer', textAlign: 'center' }}>
-                        <div style={{ fontSize: '9px', color: isSelected ? 'rgba(255,255,255,0.7)' : '#9CA3AF', marginBottom: '2px' }}>{DAYS_SHORT[i]}</div>
-                        <div style={{ fontSize: '14px', fontWeight: 700, color: isSelected ? '#fff' : isToday ? '#1B3A6B' : '#374151' }}>{day.getDate()}</div>
-                        {items.length > 0 && (
-                          <div style={{ display: 'flex', justifyContent: 'center', gap: '2px', marginTop: '3px' }}>
-                            {items.slice(0, 3).map((_, idx) => (
-                              <div key={idx} style={{ width: '5px', height: '5px', borderRadius: '50%', background: idx < completedCount ? '#2E7D52' : (isSelected ? 'rgba(255,255,255,0.5)' : '#93C5FD') }} />
+                      <button key={i} onClick={() => setSelectedDate(dateStr)} style={{ padding:'8px 3px', borderRadius:'10px', border:'2px solid', borderColor:isSelected?'#1B3A6B':isToday?'#93C5FD':'#E2EAF8', background:isSelected?'#1B3A6B':isToday?'#EEF3FB':'#fff', cursor:'pointer', textAlign:'center' }}>
+                        <div style={{ fontSize:'9px', color:isSelected?'rgba(255,255,255,0.7)':'#9CA3AF', marginBottom:'2px' }}>{DAYS_SHORT[i]}</div>
+                        <div style={{ fontSize:'14px', fontWeight:700, color:isSelected?'#fff':isToday?'#1B3A6B':'#374151' }}>{day.getDate()}</div>
+                        {items.length>0 && (
+                          <div style={{ display:'flex', justifyContent:'center', gap:'2px', marginTop:'3px' }}>
+                            {items.slice(0,3).map((_,idx)=>(
+                              <div key={idx} style={{ width:'5px', height:'5px', borderRadius:'50%', background:idx<completedCount?'#2E7D52':(isSelected?'rgba(255,255,255,0.5)':'#93C5FD') }} />
                             ))}
                           </div>
                         )}
-                        {hasSuspicious && <div style={{ fontSize: '9px', marginTop: '1px' }}>⏳</div>}
-                        {note && <div style={{ fontSize: '9px', marginTop: '1px' }}>{note.evaluation === 'good' ? '✓' : note.evaluation === 'warning' ? '⚠' : '✗'}</div>}
+                        {hasSuspicious && <div style={{ fontSize:'9px', marginTop:'1px', color:'#B45309' }}>⏳</div>}
+                        {note && <div style={{ fontSize:'9px', marginTop:'1px' }}>{note.evaluation==='good'?'✓':note.evaluation==='warning'?'⚠':'✗'}</div>}
                       </button>
                     )
                   })}
@@ -574,36 +540,37 @@ export default function StudentPanelPage() {
             )}
 
             {calendarView === 'month' && (
-              <div style={{ marginBottom: '14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                  <button onClick={() => { const d = new Date(currentMonth); d.setMonth(d.getMonth() - 1); setCurrentMonth(d) }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #D5DFF0', background: '#fff', cursor: 'pointer', fontSize: '16px' }}>‹</button>
-                  <span style={{ fontSize: '14px', fontWeight: 700, color: '#1B3A6B' }}>{MONTHS[currentMonth.getMonth()]} {currentMonth.getFullYear()}</span>
-                  <button onClick={() => { const d = new Date(currentMonth); d.setMonth(d.getMonth() + 1); setCurrentMonth(d) }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #D5DFF0', background: '#fff', cursor: 'pointer', fontSize: '16px' }}>›</button>
+              <div style={{ marginBottom:'14px' }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
+                  <button onClick={() => setCurrentMonth(d => new Date(d.getFullYear(), d.getMonth()-1, 1))} style={{ padding:'6px 12px', borderRadius:'8px', border:'1px solid #D5DFF0', background:'#fff', cursor:'pointer', fontSize:'16px' }}>‹</button>
+                  <span style={{ fontSize:'14px', fontWeight:700, color:'#1B3A6B' }}>{MONTHS[currentMonth.getMonth()]} {currentMonth.getFullYear()}</span>
+                  <button onClick={() => setCurrentMonth(d => new Date(d.getFullYear(), d.getMonth()+1, 1))} style={{ padding:'6px 12px', borderRadius:'8px', border:'1px solid #D5DFF0', background:'#fff', cursor:'pointer', fontSize:'16px' }}>›</button>
                 </div>
-                <div style={{ background: '#fff', borderRadius: '14px', padding: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '2px', marginBottom: '6px' }}>
-                    {DAYS_SHORT.map(d => <div key={d} style={{ textAlign: 'center', fontSize: '9px', fontWeight: 700, color: '#9CA3AF', padding: '3px 0' }}>{d}</div>)}
+                <div style={{ background:'#fff', borderRadius:'14px', padding:'12px', boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:'2px', marginBottom:'6px' }}>
+                    {DAYS_SHORT.map(d=><div key={d} style={{ textAlign:'center', fontSize:'9px', fontWeight:700, color:'#9CA3AF', padding:'3px 0' }}>{d}</div>)}
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '3px' }}>
-                    {monthDays.map((day, i) => {
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:'3px' }}>
+                    {monthDays.map((day,i) => {
                       if (!day) return <div key={i} />
-                      const dateStr = ds(day)
+                      const dateStr = localDate(day)
                       const items = getCalForDate(dateStr)
                       const note = getNoteForDate(dateStr)
                       const isToday = dateStr === todayStr
                       const isSelected = dateStr === selectedDate
-                      const completedCount = items.filter(x => x.status === 'completed').length
+                      const completedCount = items.filter(x=>x.status==='completed').length
+                      const isWeekend = day.getDay()===0||day.getDay()===6
                       return (
-                        <button key={i} onClick={() => setSelectedDate(dateStr)} style={{ padding: '5px 2px', borderRadius: '8px', border: '2px solid', borderColor: isSelected ? '#1B3A6B' : isToday ? '#93C5FD' : 'transparent', background: isSelected ? '#1B3A6B' : isToday ? '#EEF3FB' : 'transparent', cursor: 'pointer', textAlign: 'center' }}>
-                          <div style={{ fontSize: '12px', fontWeight: isToday ? 800 : 500, color: isSelected ? '#fff' : '#374151' }}>{day.getDate()}</div>
-                          {items.length > 0 && (
-                            <div style={{ display: 'flex', justifyContent: 'center', gap: '1px', marginTop: '2px' }}>
-                              {items.slice(0, 3).map((_, idx) => (
-                                <div key={idx} style={{ width: '4px', height: '4px', borderRadius: '50%', background: idx < completedCount ? '#2E7D52' : (isSelected ? 'rgba(255,255,255,0.5)' : '#93C5FD') }} />
+                        <button key={i} onClick={() => setSelectedDate(dateStr)} style={{ padding:'5px 2px', borderRadius:'8px', border:'2px solid', borderColor:isSelected?'#1B3A6B':isToday?'#93C5FD':'transparent', background:isSelected?'#1B3A6B':isToday?'#EEF3FB':isWeekend?'#F8FAFC':'transparent', cursor:'pointer', textAlign:'center', minHeight:'36px' }}>
+                          <div style={{ fontSize:'12px', fontWeight:isToday?800:500, color:isSelected?'#fff':'#374151' }}>{day.getDate()}</div>
+                          {items.length>0 && (
+                            <div style={{ display:'flex', justifyContent:'center', gap:'1px', marginTop:'2px' }}>
+                              {items.slice(0,3).map((_,idx)=>(
+                                <div key={idx} style={{ width:'4px', height:'4px', borderRadius:'50%', background:idx<completedCount?'#2E7D52':(isSelected?'rgba(255,255,255,0.5)':'#93C5FD') }} />
                               ))}
                             </div>
                           )}
-                          {note && <div style={{ fontSize: '9px' }}>{note.evaluation === 'good' ? '✓' : note.evaluation === 'warning' ? '⚠' : '✗'}</div>}
+                          {note && <div style={{ width:'5px', height:'5px', borderRadius:'50%', background:note.evaluation==='good'?'#2E7D52':note.evaluation==='warning'?'#B45309':'#C0392B', margin:'2px auto 0' }} />}
                         </button>
                       )
                     })}
@@ -613,53 +580,51 @@ export default function StudentPanelPage() {
             )}
 
             {/* Seçili gün detayı */}
-            <div style={{ background: '#fff', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-              <div style={{ padding: '12px 16px', background: '#F8FAFF', borderBottom: '1px solid #F0F4F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B' }}>
-                  {new Date(selectedDate + 'T12:00:00').toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })}
+            <div style={{ background:'#fff', borderRadius:'14px', overflow:'hidden', boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
+              <div style={{ padding:'12px 16px', background:'#F8FAFF', borderBottom:'1px solid #F0F4F9', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <div style={{ fontSize:'13px', fontWeight:700, color:'#1B3A6B' }}>
+                  {new Date(selectedDate+'T12:00:00').toLocaleDateString('tr-TR', { weekday:'long', day:'numeric', month:'long' })}
                 </div>
                 {selectedNote && (
-                  <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px', background: evalStyle[selectedNote.evaluation]?.bg, color: evalStyle[selectedNote.evaluation]?.color }}>
+                  <span style={{ fontSize:'11px', fontWeight:700, padding:'3px 10px', borderRadius:'20px', background:evalStyle[selectedNote.evaluation]?.bg, color:evalStyle[selectedNote.evaluation]?.color }}>
                     {evalStyle[selectedNote.evaluation]?.label}
                   </span>
                 )}
               </div>
               {selectedNote?.note && (
-                <div style={{ padding: '12px 16px', background: '#EEF3FB', borderBottom: '1px solid #F0F4F9', display: 'flex', gap: '10px' }}>
-                  <span style={{ fontSize: '16px' }}>👨‍🏫</span>
+                <div style={{ padding:'12px 16px', background:'#EEF3FB', borderBottom:'1px solid #F0F4F9', display:'flex', gap:'10px' }}>
+                  <span style={{ fontSize:'16px' }}>👨‍🏫</span>
                   <div>
-                    <div style={{ fontSize: '10px', color: '#7A8FA8', marginBottom: '3px' }}>Öğretmen Notu — {selectedNote.profiles?.full_name}</div>
-                    <div style={{ fontSize: '12.5px', color: '#1B3A6B', lineHeight: 1.6 }}>{selectedNote.note}</div>
+                    <div style={{ fontSize:'10px', color:'#7A8FA8', marginBottom:'3px' }}>Öğretmen Notu — {selectedNote.profiles?.full_name}</div>
+                    <div style={{ fontSize:'12.5px', color:'#1B3A6B', lineHeight:1.6 }}>{selectedNote.note}</div>
                   </div>
                 </div>
               )}
               {selectedItems.length === 0 ? (
-                <div style={{ padding: '28px', textAlign: 'center', color: '#7A8FA8', fontSize: '13px' }}>Bu gün için çalışma yok</div>
-              ) : selectedItems.map((item, i) => {
+                <div style={{ padding:'28px', textAlign:'center', color:'#7A8FA8', fontSize:'13px' }}>Bu gün için çalışma yok</div>
+              ) : selectedItems.map((item,i) => {
                 const isDone = item.status === 'completed'
                 return (
-                  <div key={item.id} style={{ padding: '13px 16px', borderBottom: i < selectedItems.length - 1 ? '1px solid #F0F4F9' : 'none', display: 'flex', alignItems: 'center', gap: '12px', background: isDone ? '#F8FFF8' : '#fff' }}>
-                    <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: isDone ? '#EAF4EE' : '#EEF3FB', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      {isDone ? <span style={{ fontSize: '18px', color: '#2E7D52' }}>✓</span> : <><div style={{ fontSize: '12px', fontWeight: 800, color: '#1B3A6B' }}>{item.duration_minutes}</div><div style={{ fontSize: '8px', color: '#7A8FA8' }}>dk</div></>}
+                  <div key={item.id} style={{ padding:'13px 16px', borderBottom:i<selectedItems.length-1?'1px solid #F0F4F9':'none', display:'flex', alignItems:'center', gap:'12px', background:isDone?'#F8FFF8':'#fff' }}>
+                    <div style={{ width:'42px', height:'42px', borderRadius:'10px', background:isDone?'#EAF4EE':'#EEF3FB', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                      {isDone ? <span style={{ fontSize:'18px', color:'#2E7D52' }}>✓</span> : <><div style={{ fontSize:'12px', fontWeight:800, color:'#1B3A6B' }}>{item.duration_minutes}</div><div style={{ fontSize:'8px', color:'#7A8FA8' }}>dk</div></>}
                     </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: isDone ? '#7A8FA8' : '#1B3A6B', textDecoration: isDone ? 'line-through' : 'none', marginBottom: '2px' }}>{item.title}</div>
-                      <div style={{ fontSize: '11px', color: '#7A8FA8' }}>{item.subjects?.name}{item.topics?.name ? ' — ' + item.topics.name : ''}{item.question_count > 0 ? ' · ' + item.question_count + ' soru' : ''}</div>
-                      {isDone && item.is_suspicious && item.teacher_approved === null && <div style={{ fontSize: '10px', color: '#B45309', marginTop: '2px' }}>⏳ Öğretmen onayı bekleniyor</div>}
-                      {isDone && item.teacher_approved === true && <div style={{ fontSize: '10px', color: '#2E7D52', marginTop: '2px' }}>✓ Öğretmen onayladı</div>}
-                      {isDone && item.teacher_approved === false && <div style={{ fontSize: '10px', color: '#C0392B', marginTop: '2px' }}>✗ Öğretmen reddetti</div>}
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:'13px', fontWeight:700, color:isDone?'#7A8FA8':'#1B3A6B', textDecoration:isDone?'line-through':'none', marginBottom:'2px' }}>{item.title}</div>
+                      <div style={{ fontSize:'11px', color:'#7A8FA8' }}>{item.subjects?.name}{item.topics?.name?' — '+item.topics.name:''}{item.question_count>0?' · '+item.question_count+' soru':''}</div>
+                      {isDone && item.is_suspicious && item.teacher_approved===null && <div style={{ fontSize:'10px', color:'#B45309', marginTop:'2px' }}>⏳ Öğretmen onayı bekleniyor</div>}
+                      {isDone && item.teacher_approved===true && <div style={{ fontSize:'10px', color:'#2E7D52', marginTop:'2px' }}>✓ Öğretmen onayladı</div>}
+                      {isDone && item.teacher_approved===false && <div style={{ fontSize:'10px', color:'#C0392B', marginTop:'2px' }}>✗ Öğretmen reddetti</div>}
                     </div>
                     {isDone ? (
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '18px', fontWeight: 800, color: '#2E7D52' }}>{item.score}</div>
-                        <div style={{ fontSize: '9px', color: '#7A8FA8' }}>puan</div>
+                      <div style={{ textAlign:'center' }}>
+                        <div style={{ fontSize:'18px', fontWeight:800, color:'#2E7D52' }}>{item.score}</div>
+                        <div style={{ fontSize:'9px', color:'#7A8FA8' }}>puan</div>
                       </div>
-                    ) : selectedDate === todayStr ? (
-                      <button onClick={() => startCalendarItem(item.id)} style={{ padding: '8px 12px', borderRadius: '20px', background: '#1B3A6B', color: '#fff', fontSize: '12px', fontWeight: 700, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                        Yaptım!
-                      </button>
+                    ) : selectedDate===todayStr ? (
+                      <button onClick={() => startCalendarItem(item.id)} style={{ padding:'8px 12px', borderRadius:'20px', background:'#1B3A6B', color:'#fff', fontSize:'12px', fontWeight:700, border:'none', cursor:'pointer', whiteSpace:'nowrap' }}>Yaptım!</button>
                     ) : (
-                      <span style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '20px', background: '#F0F4F9', color: '#7A8FA8' }}>Bekliyor</span>
+                      <span style={{ fontSize:'11px', padding:'4px 10px', borderRadius:'20px', background:'#F0F4F9', color:'#7A8FA8' }}>Bekliyor</span>
                     )}
                   </div>
                 )
@@ -671,34 +636,34 @@ export default function StudentPanelPage() {
         {/* ── PERFORMANS ── */}
         {activeTab === 'performance' && (
           <div>
-            <div style={{ fontSize: '16px', fontWeight: 700, color: '#1B3A6B', marginBottom: '14px' }}>📊 Konu Performansım</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '8px', marginBottom: '14px' }}>
+            <div style={{ fontSize:'16px', fontWeight:700, color:'#1B3A6B', marginBottom:'14px' }}>📊 Konu Performansım</div>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'8px', marginBottom:'14px' }}>
               {[
-                { label: 'Genel', value: '%' + overallRate, color: overallRate >= 70 ? '#2E7D52' : overallRate >= 50 ? '#B45309' : '#C0392B', bg: overallRate >= 70 ? '#EAF4EE' : overallRate >= 50 ? '#FDF4E7' : '#FEF2F2' },
-                { label: 'Güçlü', value: strongTopics.length, color: '#2E7D52', bg: '#EAF4EE' },
-                { label: 'Zayıf', value: weakTopics.length, color: '#C0392B', bg: '#FEF2F2' },
+                { label:'Genel', value:'%'+overallRate, color:overallRate>=70?'#2E7D52':overallRate>=50?'#B45309':'#C0392B', bg:overallRate>=70?'#EAF4EE':overallRate>=50?'#FDF4E7':'#FEF2F2' },
+                { label:'Güçlü', value:strongTopics.length, color:'#2E7D52', bg:'#EAF4EE' },
+                { label:'Zayıf', value:weakTopics.length, color:'#C0392B', bg:'#FEF2F2' },
               ].map(m => (
-                <div key={m.label} style={{ background: m.bg, borderRadius: '12px', padding: '14px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '22px', fontWeight: 800, color: m.color }}>{m.value}</div>
-                  <div style={{ fontSize: '10px', color: '#7A8FA8', marginTop: '3px' }}>{m.label}</div>
+                <div key={m.label} style={{ background:m.bg, borderRadius:'12px', padding:'14px', textAlign:'center' }}>
+                  <div style={{ fontSize:'22px', fontWeight:800, color:m.color }}>{m.value}</div>
+                  <div style={{ fontSize:'10px', color:'#7A8FA8', marginTop:'3px' }}>{m.label}</div>
                 </div>
               ))}
             </div>
-            {topicPerf.length === 0 ? (
-              <div style={{ background: '#F8FAFF', borderRadius: '12px', padding: '32px', textAlign: 'center', color: '#7A8FA8' }}>Henüz veri yok</div>
+            {topicPerf.length===0 ? (
+              <div style={{ background:'#F8FAFF', borderRadius:'12px', padding:'32px', textAlign:'center', color:'#7A8FA8' }}>Henüz veri yok</div>
             ) : topicPerf.map(t => {
-              const color = t.accuracy_rate >= 70 ? '#2E7D52' : t.accuracy_rate >= 50 ? '#B45309' : '#C0392B'
+              const color = t.accuracy_rate>=70?'#2E7D52':t.accuracy_rate>=50?'#B45309':'#C0392B'
               return (
-                <div key={t.id} style={{ background: '#fff', borderRadius: '12px', padding: '12px 14px', marginBottom: '8px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <div key={t.id} style={{ background:'#fff', borderRadius:'12px', padding:'12px 14px', marginBottom:'8px', boxShadow:'0 1px 4px rgba(0,0,0,0.05)' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'8px' }}>
                     <div>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B' }}>{t.topics?.name ?? 'Genel'}</div>
-                      <div style={{ fontSize: '11px', color: '#7A8FA8' }}>{t.subjects?.name}</div>
+                      <div style={{ fontSize:'13px', fontWeight:700, color:'#1B3A6B' }}>{t.topics?.name??'Genel'}</div>
+                      <div style={{ fontSize:'11px', color:'#7A8FA8' }}>{t.subjects?.name}</div>
                     </div>
-                    <span style={{ fontSize: '18px', fontWeight: 800, color }}>%{Math.round(t.accuracy_rate)}</span>
+                    <span style={{ fontSize:'18px', fontWeight:800, color }}>%{Math.round(t.accuracy_rate)}</span>
                   </div>
-                  <div style={{ height: '6px', background: '#F0F4F9', borderRadius: '3px', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: Math.min(t.accuracy_rate, 100) + '%', background: color, borderRadius: '3px' }} />
+                  <div style={{ height:'6px', background:'#F0F4F9', borderRadius:'3px', overflow:'hidden' }}>
+                    <div style={{ height:'100%', width:Math.min(t.accuracy_rate,100)+'%', background:color, borderRadius:'3px' }} />
                   </div>
                 </div>
               )
@@ -709,29 +674,29 @@ export default function StudentPanelPage() {
         {/* ── ÖDEVLER ── */}
         {activeTab === 'homework' && (
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <div style={{ fontSize: '16px', fontWeight: 700, color: '#1B3A6B' }}>📚 Ödevlerim</div>
-              <div style={{ display: 'flex', gap: '5px' }}>
-                <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: '#FDF4E7', color: '#B45309', fontWeight: 600 }}>{pendingHw} bekliyor</span>
-                <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '20px', background: '#EAF4EE', color: '#2E7D52', fontWeight: 600 }}>{homework.filter(h => h.status === 'completed').length} tamam</span>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px' }}>
+              <div style={{ fontSize:'16px', fontWeight:700, color:'#1B3A6B' }}>📚 Ödevlerim</div>
+              <div style={{ display:'flex', gap:'5px' }}>
+                <span style={{ fontSize:'11px', padding:'3px 10px', borderRadius:'20px', background:'#FDF4E7', color:'#B45309', fontWeight:600 }}>{pendingHw} bekliyor</span>
+                <span style={{ fontSize:'11px', padding:'3px 10px', borderRadius:'20px', background:'#EAF4EE', color:'#2E7D52', fontWeight:600 }}>{homework.filter(h=>h.status==='completed').length} tamam</span>
               </div>
             </div>
-            {homework.length === 0 ? (
-              <div style={{ background: '#F8FAFF', borderRadius: '12px', padding: '32px', textAlign: 'center', color: '#7A8FA8' }}>Henüz ödev yok</div>
+            {homework.length===0 ? (
+              <div style={{ background:'#F8FAFF', borderRadius:'12px', padding:'32px', textAlign:'center', color:'#7A8FA8' }}>Henüz ödev yok</div>
             ) : homework.map(h => {
-              const isDone = h.status === 'completed'
-              const isLate = !isDone && h.deadline && new Date(h.deadline) < new Date()
+              const isDone = h.status==='completed'
+              const isLate = !isDone&&h.deadline&&new Date(h.deadline)<new Date()
               return (
-                <a key={h.id} href={`/homework/${h.id}`} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '13px', marginBottom: '8px', borderRadius: '14px', textDecoration: 'none', background: '#fff', border: '1px solid', borderColor: isDone ? '#D1FAE5' : isLate ? '#FECACA' : '#E2EAF8' }}>
-                  <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: isDone ? '#EAF4EE' : isLate ? '#FEF2F2' : '#EEF3FB', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', flexShrink: 0 }}>
-                    {isDone ? '✅' : isLate ? '⏰' : '📝'}
+                <a key={h.id} href={`/homework/${h.id}`} style={{ display:'flex', alignItems:'center', gap:'12px', padding:'13px', marginBottom:'8px', borderRadius:'14px', textDecoration:'none', background:'#fff', border:'1px solid', borderColor:isDone?'#D1FAE5':isLate?'#FECACA':'#E2EAF8' }}>
+                  <div style={{ width:'44px', height:'44px', borderRadius:'12px', background:isDone?'#EAF4EE':isLate?'#FEF2F2':'#EEF3FB', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'20px', flexShrink:0 }}>
+                    {isDone?'✅':isLate?'⏰':'📝'}
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B', textDecoration: isDone ? 'line-through' : 'none', marginBottom: '2px' }}>{h.tests?.name}</div>
-                    <div style={{ fontSize: '11px', color: '#7A8FA8' }}>{h.tests?.chapters?.books?.name}</div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:'13px', fontWeight:700, color:'#1B3A6B', textDecoration:isDone?'line-through':'none', marginBottom:'2px' }}>{h.tests?.name}</div>
+                    <div style={{ fontSize:'11px', color:'#7A8FA8' }}>{h.tests?.chapters?.books?.name}</div>
                   </div>
-                  <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '20px', background: isDone ? '#EAF4EE' : isLate ? '#FEF2F2' : '#FDF4E7', color: isDone ? '#2E7D52' : isLate ? '#C0392B' : '#B45309' }}>
-                    {isDone ? 'Tamam' : isLate ? 'Gecikti!' : 'Yap →'}
+                  <span style={{ fontSize:'11px', fontWeight:700, padding:'4px 10px', borderRadius:'20px', background:isDone?'#EAF4EE':isLate?'#FEF2F2':'#FDF4E7', color:isDone?'#2E7D52':isLate?'#C0392B':'#B45309' }}>
+                    {isDone?'Tamam':isLate?'Gecikti!':'Yap →'}
                   </span>
                 </a>
               )
@@ -742,33 +707,33 @@ export default function StudentPanelPage() {
         {/* ── HEDEFLER ── */}
         {activeTab === 'goals' && (
           <div>
-            <div style={{ fontSize: '16px', fontWeight: 700, color: '#1B3A6B', marginBottom: '14px' }}>🎯 Hedeflerim</div>
-            {goals.length === 0 ? (
-              <div style={{ background: '#F8FAFF', border: '1px solid #D5DFF0', borderRadius: '14px', padding: '32px', textAlign: 'center' }}>
-                <div style={{ fontSize: '32px', marginBottom: '10px' }}>🎯</div>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#1B3A6B' }}>Henüz hedef belirlenmedi</div>
+            <div style={{ fontSize:'16px', fontWeight:700, color:'#1B3A6B', marginBottom:'14px' }}>🎯 Hedeflerim</div>
+            {goals.length===0 ? (
+              <div style={{ background:'#F8FAFF', border:'1px solid #D5DFF0', borderRadius:'14px', padding:'32px', textAlign:'center' }}>
+                <div style={{ fontSize:'32px', marginBottom:'10px' }}>🎯</div>
+                <div style={{ fontSize:'13px', fontWeight:700, color:'#1B3A6B' }}>Henüz hedef belirlenmedi</div>
               </div>
             ) : goals.map(g => {
-              const progress = g.target_score > 0 ? Math.min(Math.round((g.current_score / g.target_score) * 100), 100) : 0
-              const pColor = progress >= 80 ? '#2E7D52' : progress >= 50 ? '#B45309' : '#1B3A6B'
+              const progress = g.target_score>0 ? Math.min(Math.round((g.current_score/g.target_score)*100),100) : 0
+              const pColor = progress>=80?'#2E7D52':progress>=50?'#B45309':'#1B3A6B'
               return (
-                <div key={g.id} style={{ background: '#fff', borderRadius: '14px', padding: '18px', marginBottom: '10px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '14px' }}>
+                <div key={g.id} style={{ background:'#fff', borderRadius:'14px', padding:'18px', marginBottom:'10px', boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:'14px' }}>
                     <div>
-                      <div style={{ fontSize: '18px', fontWeight: 800, color: '#1B3A6B' }}>{g.target_exam}</div>
-                      <div style={{ fontSize: '11px', color: '#7A8FA8' }}>{g.target_date ? new Date(g.target_date).toLocaleDateString('tr-TR') : '—'}</div>
+                      <div style={{ fontSize:'18px', fontWeight:800, color:'#1B3A6B' }}>{g.target_exam}</div>
+                      <div style={{ fontSize:'11px', color:'#7A8FA8' }}>{g.target_date?new Date(g.target_date).toLocaleDateString('tr-TR'):'—'}</div>
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '24px', fontWeight: 800, color: '#1B3A6B' }}>{g.target_score}</div>
-                      <div style={{ fontSize: '10px', color: '#7A8FA8' }}>hedef puan</div>
+                    <div style={{ textAlign:'right' }}>
+                      <div style={{ fontSize:'24px', fontWeight:800, color:'#1B3A6B' }}>{g.target_score}</div>
+                      <div style={{ fontSize:'10px', color:'#7A8FA8' }}>hedef puan</div>
                     </div>
                   </div>
-                  <div style={{ height: '10px', background: '#F0F4F9', borderRadius: '5px', overflow: 'hidden', marginBottom: '8px' }}>
-                    <div style={{ height: '100%', width: progress + '%', background: pColor, borderRadius: '5px' }} />
+                  <div style={{ height:'10px', background:'#F0F4F9', borderRadius:'5px', overflow:'hidden', marginBottom:'8px' }}>
+                    <div style={{ height:'100%', width:progress+'%', background:pColor, borderRadius:'5px' }} />
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#7A8FA8' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', fontSize:'11px', color:'#7A8FA8' }}>
                     <span>Mevcut: {g.current_score}</span>
-                    <span style={{ fontWeight: 700, color: pColor }}>%{progress}</span>
+                    <span style={{ fontWeight:700, color:pColor }}>%{progress}</span>
                   </div>
                 </div>
               )
@@ -779,26 +744,26 @@ export default function StudentPanelPage() {
         {/* ── SWOT ── */}
         {activeTab === 'swot' && (
           <div>
-            <div style={{ fontSize: '16px', fontWeight: 700, color: '#1B3A6B', marginBottom: '14px' }}>🔍 SWOT Analizim</div>
-            {topicPerf.length === 0 ? (
-              <div style={{ background: '#FDF4E7', border: '1px solid #FED7AA', borderRadius: '14px', padding: '32px', textAlign: 'center' }}>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#B45309' }}>Yeterli veri yok</div>
+            <div style={{ fontSize:'16px', fontWeight:700, color:'#1B3A6B', marginBottom:'14px' }}>🔍 SWOT Analizim</div>
+            {topicPerf.length===0 ? (
+              <div style={{ background:'#FDF4E7', border:'1px solid #FED7AA', borderRadius:'14px', padding:'32px', textAlign:'center' }}>
+                <div style={{ fontSize:'13px', fontWeight:700, color:'#B45309' }}>Yeterli veri yok</div>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
                 {[
-                  { title: '💪 Güçlü Yönlerim', items: strongTopics, color: '#2E7D52', bg: '#EAF4EE', border: '#D1FAE5', empty: 'Henüz güçlü konu yok' },
-                  { title: '📈 Gelişim Alanlarım', items: weakTopics, color: '#C0392B', bg: '#FEF2F2', border: '#FEE2E2', empty: 'Kritik zayıflık yok!' },
-                  { title: '🎯 Fırsatlarım', items: midTopics, color: '#B45309', bg: '#FDF4E7', border: '#FEF3C7', empty: 'Orta seviye konu yok' },
+                  { title:'💪 Güçlü Yönlerim', items:strongTopics, color:'#2E7D52', bg:'#EAF4EE', border:'#D1FAE5', empty:'Henüz güçlü konu yok' },
+                  { title:'📈 Gelişim Alanlarım', items:weakTopics, color:'#C0392B', bg:'#FEF2F2', border:'#FEE2E2', empty:'Kritik zayıflık yok!' },
+                  { title:'🎯 Fırsatlarım', items:midTopics, color:'#B45309', bg:'#FDF4E7', border:'#FEF3C7', empty:'Orta seviye konu yok' },
                 ].map(box => (
-                  <div key={box.title} style={{ background: box.bg, border: '1px solid ' + box.border, borderRadius: '14px', padding: '14px' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: box.color, marginBottom: '10px' }}>{box.title}</div>
-                    {box.items.length === 0 ? (
-                      <div style={{ fontSize: '12px', color: '#7A8FA8' }}>{box.empty}</div>
-                    ) : box.items.slice(0, 4).map(t => (
-                      <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid rgba(0,0,0,0.05)', fontSize: '12px' }}>
-                        <span style={{ color: '#374151' }}>{t.subjects?.name} — {t.topics?.name ?? 'Genel'}</span>
-                        <strong style={{ color: box.color }}>%{Math.round(t.accuracy_rate)}</strong>
+                  <div key={box.title} style={{ background:box.bg, border:'1px solid '+box.border, borderRadius:'14px', padding:'14px' }}>
+                    <div style={{ fontSize:'13px', fontWeight:700, color:box.color, marginBottom:'10px' }}>{box.title}</div>
+                    {box.items.length===0 ? (
+                      <div style={{ fontSize:'12px', color:'#7A8FA8' }}>{box.empty}</div>
+                    ) : box.items.slice(0,4).map(t => (
+                      <div key={t.id} style={{ display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid rgba(0,0,0,0.05)', fontSize:'12px' }}>
+                        <span style={{ color:'#374151' }}>{t.subjects?.name} — {t.topics?.name??'Genel'}</span>
+                        <strong style={{ color:box.color }}>%{Math.round(t.accuracy_rate)}</strong>
                       </div>
                     ))}
                   </div>
