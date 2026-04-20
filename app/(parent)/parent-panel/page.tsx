@@ -106,7 +106,12 @@ export default function ParentPanelPage() {
     for (let i = 1; i <= lastDay.getDate(); i++) days.push(new Date(year, month, i))
     return days
   }
-  function ds(d: Date) { return d.toISOString().slice(0, 10) }
+  function ds(d: Date) {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
   function getCalForDate(dateStr: string) { return calendar.filter(c => c.calendar_date === dateStr) }
   function getNoteForDate(dateStr: string) { return calendarNotes.find(n => n.calendar_date === dateStr) }
   function getHoliday(dateStr: string) { return holidays.find(h => h.holiday_date === dateStr) }
