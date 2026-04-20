@@ -16,8 +16,39 @@ function VerificationModal({ item, onVerified, onClose, supabase }: any) {
   useEffect(() => { loadQuestion() }, [])
 
   async function loadQuestion() {
-    const { data } = await supabase.from('verification_questions').select('*').limit(10)
-    if (data && data.length > 0) setQuestion(data[Math.floor(Math.random() * data.length)])
+    // 1. Önce konuya özel soru ara
+    if (item.topic_id && item.subject_id) {
+      const { data } = await supabase
+        .from('verification_questions')
+        .select('*')
+        .eq('subject_id', item.subject_id)
+        .limit(20)
+      if (data && data.length > 0) {
+        setQuestion(data[Math.floor(Math.random() * data.length)])
+        return
+      }
+    }
+    // 2. Derse özel soru ara
+    if (item.subject_id) {
+      const { data } = await supabase
+        .from('verification_questions')
+        .select('*')
+        .eq('subject_id', item.subject_id)
+        .limit(20)
+      if (data && data.length > 0) {
+        setQuestion(data[Math.floor(Math.random() * data.length)])
+        return
+      }
+    }
+    // 3. Son çare: subject_id null olan genel sorular
+    const { data } = await supabase
+      .from('verification_questions')
+      .select('*')
+      .is('subject_id', null)
+      .limit(10)
+    if (data && data.length > 0) {
+      setQuestion(data[Math.floor(Math.random() * data.length)])
+    }
   }
 
   async function submitVerification() {
