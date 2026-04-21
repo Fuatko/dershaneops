@@ -96,6 +96,9 @@ export default function TeacherPanelPage() {
   const [calTopics, setCalTopics] = useState<any[]>([])
   const [savingCalItem, setSavingCalItem] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [hwFilterClass, setHwFilterClass] = useState('')
+const [hwFilterStudent, setHwFilterStudent] = useState('')
+const [hwFilterStatus, setHwFilterStatus] = useState('all')
   const [form, setForm] = useState({ student_id:'', subject_id:'', topic_id:'', attempt_date:localDate(), correct_count:0, wrong_count:0, blank_count:0, difficulty_level:'medium', notes:'' })
   const supabase = createClient()
   const todayStr = localDate()
@@ -782,40 +785,141 @@ export default function TeacherPanelPage() {
 
         {/* ÖDEV TAKİBİ */}
         {activeTab === 'homework' && (
-          <div>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'14px' }}>
-              <div style={{ fontSize:'15px', fontWeight:700, color:P.text }}>Ödev Takibi</div>
-              <div style={{ display:'flex', gap:'5px' }}>
-                <span style={{ fontSize:'10px', padding:'3px 9px', borderRadius:'6px', background:P.amberLight, color:P.amber, fontWeight:600, border:'1px solid '+P.amberBorder }}>{homework.filter(h=>h.status!=='completed').length} bekliyor</span>
-                <span style={{ fontSize:'10px', padding:'3px 9px', borderRadius:'6px', background:P.greenLight, color:P.green, fontWeight:600, border:'1px solid '+P.greenBorder }}>{homework.filter(h=>h.status==='completed').length} tamam</span>
-              </div>
-            </div>
-            {homework.length===0 ? (
-              <div style={{ background:P.white, borderRadius:'10px', padding:'32px', textAlign:'center', color:P.muted, border:'1px solid '+P.border, fontSize:'13px' }}>Henüz ödev atanmamış</div>
-            ) : homework.map(h => {
-              const isDone = h.status==='completed'
-              const isLate = !isDone&&h.deadline&&new Date(h.deadline)<new Date()
-              const student = students.find(s=>s.id===h.student_id)
+  <div>
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'14px', flexWrap:'wrap', gap:'8px' }}>
+      <div style={{ fontSize:'15px', fontWeight:700, color:P.text }}>Ödev Takibi</div>
+      <div style={{ display:'flex', gap:'5px' }}>
+        <span style={{ fontSize:'10px', padding:'3px 9px', borderRadius:'6px', background:P.amberLight, color:P.amber, fontWeight:600, border:'1px solid '+P.amberBorder }}>
+          {homework.filter(h=>h.status!=='completed').length} bekliyor
+        </span>
+        <span style={{ fontSize:'10px', padding:'3px 9px', borderRadius:'6px', background:P.greenLight, color:P.green, fontWeight:600, border:'1px solid '+P.greenBorder }}>
+          {homework.filter(h=>h.status==='completed').length} tamam
+        </span>
+      </div>
+    </div>
+
+    {/* Filtreler */}
+    <div style={{ background:P.white, borderRadius:'10px', padding:'12px', marginBottom:'12px', border:'1px solid '+P.border, display:'flex', flexDirection:'column', gap:'8px' }}>
+      <div>
+        <div style={{ fontSize:'10px', fontWeight:600, color:P.slate, textTransform:'uppercase', letterSpacing:'0.4px', marginBottom:'6px' }}>Sınıf</div>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:'5px' }}>
+          <button onClick={() => { setHwFilterClass(''); setHwFilterStudent('') }}
+            style={{ padding:'5px 12px', borderRadius:'20px', border:'1.5px solid', borderColor:hwFilterClass===''?P.navy:P.border, background:hwFilterClass===''?P.navy:'#fff', color:hwFilterClass===''?'#fff':P.slate, fontSize:'11.5px', fontWeight:600, cursor:'pointer' }}>
+            Tümü
+          </button>
+          {[...new Set(students.filter(s=>s.grade_level).map(s=>s.grade_level))].sort().map(grade => (
+            <button key={grade} onClick={() => { setHwFilterClass(String(grade)); setHwFilterStudent('') }}
+              style={{ padding:'5px 12px', borderRadius:'20px', border:'1.5px solid', borderColor:hwFilterClass===String(grade)?P.navy:P.border, background:hwFilterClass===String(grade)?P.navy:'#fff', color:hwFilterClass===String(grade)?'#fff':P.slate, fontSize:'11.5px', fontWeight:600, cursor:'pointer' }}>
+              {grade}. Sınıf
+            </button>
+          ))}
+        </div>
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px' }}>
+        <div>
+          <div style={{ fontSize:'10px', fontWeight:600, color:P.slate, textTransform:'uppercase', letterSpacing:'0.4px', marginBottom:'5px' }}>Öğrenci</div>
+          <select value={hwFilterStudent} onChange={e => setHwFilterStudent(e.target.value)} style={inp}>
+            <option value="">Tüm Öğrenciler</option>
+            {students.filter(s => !hwFilterClass || String(s.grade_level) === hwFilterClass).map(s => (
+              <option key={s.id} value={s.id}>{s.full_name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <div style={{ fontSize:'10px', fontWeight:600, color:P.slate, textTransform:'uppercase', letterSpacing:'0.4px', marginBottom:'5px' }}>Durum</div>
+          <select value={hwFilterStatus} onChange={e => setHwFilterStatus(e.target.value)} style={inp}>
+            <option value="all">Tümü</option>
+            <option value="pending">Bekliyor</option>
+            <option value="completed">Tamamlandı</option>
+            <option value="late">Gecikti</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    {(() => {
+      const filtered = homework.filter(h => {
+        const student = students.find(s => s.id === h.student_id)
+        if (hwFilterClass && String(student?.grade_level) !== hwFilterClass) return false
+        if (hwFilterStudent && h.student_id !== hwFilterStudent) return false
+        if (hwFilterStatus === 'pending' && h.status === 'completed') return false
+        if (hwFilterStatus === 'completed' && h.status !== 'completed') return false
+        if (hwFilterStatus === 'late') {
+          if (h.status === 'completed') return false
+          if (!h.deadline || new Date(h.deadline) >= new Date()) return false
+        }
+        return true
+      })
+
+      if (filtered.length === 0) return (
+        <div style={{ background:P.white, borderRadius:'10px', padding:'32px', textAlign:'center', color:P.muted, border:'1px solid '+P.border, fontSize:'13px' }}>
+          Bu filtreye uygun ödev bulunamadı
+        </div>
+      )
+
+      const grouped: Record<string, typeof filtered> = {}
+      filtered.forEach(h => {
+        const student = students.find(s => s.id === h.student_id)
+        const key = student?.grade_level ? `${student.grade_level}. Sınıf` : 'Sınıfsız'
+        if (!grouped[key]) grouped[key] = []
+        grouped[key].push(h)
+      })
+
+      return Object.entries(grouped).sort().map(([grade, items]) => (
+        <div key={grade} style={{ marginBottom:'14px' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'6px' }}>
+            <div style={{ fontSize:'11px', fontWeight:700, color:P.navy, textTransform:'uppercase', letterSpacing:'0.5px' }}>{grade}</div>
+            <div style={{ height:'1px', flex:1, background:P.border }} />
+            <span style={{ fontSize:'11px', color:P.muted }}>{items.length} ödev</span>
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
+            {items.map(h => {
+              const isDone = h.status === 'completed'
+              const isLate = !isDone && h.deadline && new Date(h.deadline) < new Date()
+              const student = students.find(s => s.id === h.student_id)
               return (
-                <div key={h.id} style={{ padding:'12px 14px', marginBottom:'6px', borderRadius:'10px', background:P.white, border:'1px solid', borderColor:isDone?P.greenBorder:isLate?P.redBorder:P.border, display:'flex', alignItems:'center', gap:'10px' }}>
-                  <div style={{ width:'34px', height:'34px', borderRadius:'8px', background:isDone?P.greenLight:P.navyLight, display:'flex', alignItems:'center', justifyContent:'center', color:isDone?P.green:P.navy, flexShrink:0 }}>
-                    {isDone?<Icon.check />:<Icon.clock />}
+                <div key={h.id} style={{ padding:'12px 14px', borderRadius:'10px', background:P.white, border:'1px solid', borderColor:isDone?P.greenBorder:isLate?P.redBorder:P.border, display:'flex', alignItems:'center', gap:'10px' }}>
+                  <div style={{ width:'36px', height:'36px', borderRadius:'50%', background:isDone?P.greenLight:isLate?P.redLight:P.navyLight, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', fontWeight:700, color:isDone?P.green:isLate?P.red:P.navy, flexShrink:0 }}>
+                    {h.profiles?.full_name?.split(' ').map((n:string)=>n[0]).join('').slice(0,2)}
                   </div>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:'12.5px', fontWeight:600, color:P.text, marginBottom:'2px' }}>{h.tests?.name}</div>
-                    <div style={{ fontSize:'10px', color:P.muted }}>{h.profiles?.full_name}{student?.grade_level?' · '+student.grade_level+'. Sınıf':''}</div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:'12.5px', fontWeight:600, color:P.text, marginBottom:'2px' }}>
+                      {h.profiles?.full_name}
+                      {student?.classroom_name && (
+                        <span style={{ marginLeft:'6px', fontSize:'10px', padding:'1px 6px', borderRadius:'4px', background:P.navyLight, color:P.navy, fontWeight:600 }}>
+                          {student.classroom_name}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize:'11px', color:P.muted, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                      {h.tests?.name} · {h.tests?.chapters?.books?.name}
+                    </div>
+                    {h.deadline && (
+                      <div style={{ fontSize:'10px', color:isLate?P.red:P.muted, marginTop:'2px' }}>
+                        Son teslim: {new Date(h.deadline).toLocaleDateString('tr-TR')}
+                        {isLate && ' — Gecikti!'}
+                      </div>
+                    )}
                   </div>
                   <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'4px', flexShrink:0 }}>
                     <span style={{ fontSize:'10px', fontWeight:600, padding:'2px 8px', borderRadius:'5px', background:isDone?P.greenLight:isLate?P.redLight:P.amberLight, color:isDone?P.green:isLate?P.red:P.amber, border:'1px solid '+(isDone?P.greenBorder:isLate?P.redBorder:P.amberBorder) }}>
-                      {isDone?'Tamamlandı':isLate?'Gecikti':'Bekliyor'}
+                      {isDone ? 'Tamamlandı' : isLate ? 'Gecikti' : 'Bekliyor'}
                     </span>
-                    {isDone && <button onClick={() => resetHomework(h.id)} style={{ padding:'2px 8px', borderRadius:'5px', border:'1px solid '+P.border, background:P.white, color:P.muted, fontSize:'10px', cursor:'pointer' }}>Sıfırla</button>}
+                    {isDone && (
+                      <button onClick={() => resetHomework(h.id)} style={{ padding:'2px 8px', borderRadius:'5px', border:'1px solid '+P.border, background:P.white, color:P.muted, fontSize:'10px', cursor:'pointer' }}>
+                        Sıfırla
+                      </button>
+                    )}
                   </div>
                 </div>
               )
             })}
           </div>
-        )}
+        </div>
+      ))
+    })()}
+  </div>
+)}
 
       </div>
     </div>
