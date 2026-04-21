@@ -29,6 +29,7 @@ function getMonthDays(date: Date) {
   return days
 }
 
+// ── DOĞRULAMA MODALI ──────────────────────────────────────────
 function VerificationModal({ item, onVerified, onClose, supabase }: any) {
   const [step, setStep] = useState<'duration'|'question'|'done'>('duration')
   const [duration, setDuration] = useState('')
@@ -63,7 +64,8 @@ function VerificationModal({ item, onVerified, onClose, supabase }: any) {
       is_suspicious: isSuspicious || !isCorrect,
       suspicion_reason: suspicionReason || null,
       teacher_approved: isSuspicious || !isCorrect ? null : true,
-      verification_answer: selectedAnswer, verification_score: isCorrect ? 100 : 0,
+      verification_answer: selectedAnswer,
+      verification_score: isCorrect ? 100 : 0,
       score: isCorrect ? Math.floor(Math.random()*10)+90 : Math.floor(Math.random()*20)+60,
     }).eq('id', item.id)
     setResult(isCorrect ? 'correct' : 'wrong')
@@ -129,6 +131,7 @@ function VerificationModal({ item, onVerified, onClose, supabase }: any) {
   )
 }
 
+// ── ANA SAYFA ─────────────────────────────────────────────────
 export default function StudentPanelPage() {
   const [profile, setProfile] = useState<any>(null)
   const [topicPerf, setTopicPerf] = useState<any[]>([])
@@ -161,7 +164,6 @@ export default function StudentPanelPage() {
     const { data: p } = await supabase.from('profiles').select('*').eq('user_id', user.id).single()
     if (!p) { setLoading(false); return }
     setProfile(p)
-    const prevBadgeCount = badges.length
 
     const [
       { data: tp }, { data: hw }, { data: st }, { data: sb },
@@ -178,14 +180,16 @@ export default function StudentPanelPage() {
       supabase.from('public_holidays').select('*').order('holiday_date'),
     ])
 
-    setTopicPerf(tp ?? [])
-    setHomework(hw ?? [])
-    setStreak(st)
+    const prevCount = badges.length
     const newBadges = sb ?? []
-    if (newBadges.length > prevBadgeCount && prevBadgeCount > 0) {
+    if (newBadges.length > prevCount && prevCount > 0) {
       setNewBadge(newBadges[0])
       setTimeout(() => setNewBadge(null), 4000)
     }
+
+    setTopicPerf(tp ?? [])
+    setHomework(hw ?? [])
+    setStreak(st)
     setBadges(newBadges)
     setDailyTasks(dt ?? [])
     setGoals(g ?? [])
@@ -193,6 +197,48 @@ export default function StudentPanelPage() {
     setCalendarNotes(notes ?? [])
     setHolidays(hols ?? [])
     setLoading(false)
+  }
+
+  // ── ROZET OTOMASYonu ─────────────────────────────────────────
+  async function awardBadges(studentId: string) {
+    const { data: allBadges } = await supabase.from('badges').select('*').not('condition_type', 'is', null)
+    if (!allBadges || allBadges.length === 0) return
+
+    const { data: earnedData } = await supabase.from('student_badges').select('badge_id').eq('student_id', studentId)
+    const earned = new Set((earnedData ?? []).map((b: any) => b.badge_id))
+
+    const { data: stData } = await supabase.from('student_streaks').select('*').eq('student_id', studentId).single()
+    const { count: taskCount } = await supabase.from('daily_tasks').select('*', { count:'exact', head:true }).eq('student_id', studentId).eq('status', 'completed')
+    const { count: calCount } = await supabase.from('study_calendar').select('*', { count:'exact', head:true }).eq('student_id', studentId).eq('status', 'completed')
+    const { count: hwCount } = await supabase.from('homework_assignments').select('*', { count:'exact', head:true }).eq('student_id', studentId).eq('status', 'completed')
+    const { data: perfData } = await supabase.from('student_topic_performance').select('correct_count, total_questions').eq('student_id', studentId)
+
+    const totalQ = (perfData ?? []).reduce((s: number, t: any) => s + t.total_questions, 0)
+    const totalC = (perfData ?? []).reduce((s: number, t: any) => s + t.correct_count, 0)
+    const accuracy = totalQ > 0 ? (totalC / totalQ) * 100 : 0
+    const currentStreak = stData?.current_streak ?? 0
+    let newBadgeFound: any = null
+
+    for (const badge of allBadges) {
+      if (earned.has(badge.id)) continue
+      let met = false
+      if (badge.condition_type === 'streak'   && currentStreak      >= badge.condition_value) met = true
+      if (badge.condition_type === 'tasks'    && (taskCount ?? 0)   >= badge.condition_value) met = true
+      if (badge.condition_type === 'calendar' && (calCount ?? 0)    >= badge.condition_value) met = true
+      if (badge.condition_type === 'accuracy' && accuracy           >= badge.condition_value) met = true
+      if (badge.condition_type === 'homework' && (hwCount ?? 0)     >= badge.condition_value) met = true
+
+      if (met) {
+        const { data: inserted } = await supabase.from('student_badges').insert({ student_id: studentId, badge_id: badge.id, earned_at: new Date().toISOString() }).select('*, badges(*)').single()
+        await supabase.from('student_streaks').update({ total_points: (stData?.total_points ?? 0) + (badge.points ?? 100), updated_at: new Date().toISOString() }).eq('student_id', studentId)
+        if (!newBadgeFound && inserted) newBadgeFound = inserted
+      }
+    }
+
+    if (newBadgeFound) {
+      setNewBadge(newBadgeFound)
+      setTimeout(() => setNewBadge(null), 4000)
+    }
   }
 
   async function startCalendarItem(id: string) {
@@ -210,10 +256,18 @@ export default function StudentPanelPage() {
     if (streak) {
       const yesterday = localDate(new Date(Date.now()-86400000))
       const newStreak = streak.last_active_date === todayStr ? streak.current_streak : (streak.last_active_date === yesterday ? streak.current_streak+1 : 1)
-      await supabase.from('student_streaks').update({ current_streak:newStreak, longest_streak:Math.max(newStreak, streak.longest_streak??0), last_active_date:todayStr, total_points:(streak.total_points??0)+score, daily_score:Math.min((streak.daily_score??0)+score,100), updated_at:new Date().toISOString() }).eq('student_id', profile.id)
+      await supabase.from('student_streaks').update({
+        current_streak: newStreak,
+        longest_streak: Math.max(newStreak, streak.longest_streak ?? 0),
+        last_active_date: todayStr,
+        total_points: (streak.total_points ?? 0) + score,
+        daily_score: Math.min((streak.daily_score ?? 0) + score, 100),
+        updated_at: new Date().toISOString()
+      }).eq('student_id', profile.id)
     }
+    await awardBadges(profile.id)
     const remaining = dailyTasks.filter(t => t.status==='pending' && t.id!==taskId).length
-    if (remaining===0) { setCelebrationMsg('Tüm görevleri tamamladın! 🎉'); setCelebration(true); setTimeout(()=>setCelebration(false),4000) }
+    if (remaining === 0) { setCelebrationMsg('Tüm görevleri tamamladın! 🎉'); setCelebration(true); setTimeout(()=>setCelebration(false),4000) }
     else { setCelebrationMsg(score+' puan kazandın! ⭐'); setCelebration(true); setTimeout(()=>setCelebration(false),2000) }
     await load()
   }
@@ -232,6 +286,7 @@ export default function StudentPanelPage() {
   const selectedItems = getCalForDate(selectedDate)
   const selectedNote = getNoteForDate(selectedDate)
   const selectedHoliday = getHoliday(selectedDate)
+
   const totalQ = topicPerf.reduce((s,t)=>s+t.total_questions,0)
   const totalC = topicPerf.reduce((s,t)=>s+t.correct_count,0)
   const overallRate = totalQ>0 ? Math.round(totalC/totalQ*100) : 0
@@ -284,10 +339,11 @@ export default function StudentPanelPage() {
   return (
     <div style={{ minHeight:'100vh', background:'#F0F4F9', fontFamily:'-apple-system, BlinkMacSystemFont, sans-serif' }}>
 
+      {/* Yeni Rozet Bildirimi */}
       {newBadge && (
         <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, display:'flex', alignItems:'center', justifyContent:'center', zIndex:1001, background:'rgba(0,0,0,0.5)', pointerEvents:'none' }}>
-          <div style={{ background:'#1B3A6B', borderRadius:'24px', padding:'32px 40px', textAlign:'center' }}>
-            <div style={{ fontSize:'64px', marginBottom:'12px' }}>{newBadge.badges?.icon}</div>
+          <div style={{ background:'#1B3A6B', borderRadius:'24px', padding:'32px 40px', textAlign:'center', boxShadow:'0 20px 60px rgba(0,0,0,0.4)' }}>
+            <div style={{ fontSize:'64px', marginBottom:'12px' }}>{newBadge.badges?.icon ?? '🏅'}</div>
             <div style={{ fontSize:'14px', color:'rgba(255,255,255,0.7)', marginBottom:'6px' }}>Yeni Rozet Kazandın!</div>
             <div style={{ fontSize:'22px', fontWeight:800, color:'#fff', marginBottom:'6px' }}>{newBadge.badges?.name}</div>
             <div style={{ fontSize:'13px', color:'rgba(255,255,255,0.6)' }}>{newBadge.badges?.description}</div>
@@ -295,13 +351,24 @@ export default function StudentPanelPage() {
         </div>
       )}
 
+      {/* Doğrulama Modalı */}
       {verifyItem && (
-        <VerificationModal item={verifyItem} supabase={supabase}
-          onVerified={async () => { setVerifyItem(null); setCelebrationMsg('Görev tamamlandı! 🎉'); setCelebration(true); setTimeout(()=>setCelebration(false),3000); await load() }}
+        <VerificationModal
+          item={verifyItem}
+          supabase={supabase}
+          onVerified={async () => {
+            setVerifyItem(null)
+            await awardBadges(profile.id)
+            setCelebrationMsg('Görev tamamlandı! 🎉')
+            setCelebration(true)
+            setTimeout(() => setCelebration(false), 3000)
+            await load()
+          }}
           onClose={() => setVerifyItem(null)}
         />
       )}
 
+      {/* Kutlama */}
       {celebration && (
         <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, display:'flex', alignItems:'center', justifyContent:'center', zIndex:999, pointerEvents:'none', background:'rgba(0,0,0,0.3)' }}>
           <div style={{ background:'#1B3A6B', borderRadius:'20px', padding:'28px 40px', textAlign:'center' }}>
@@ -331,6 +398,7 @@ export default function StudentPanelPage() {
         </div>
       </div>
 
+      {/* Skor bar */}
       {streak && (
         <div style={{ background:'#fff', padding:'8px 16px', display:'flex', alignItems:'center', gap:'10px', borderBottom:'1px solid #F0F4F9' }}>
           <div style={{ flex:1, height:'6px', background:'#F0F4F9', borderRadius:'3px', overflow:'hidden' }}>
@@ -354,7 +422,7 @@ export default function StudentPanelPage() {
 
       <div style={{ padding:'16px 16px 80px' }}>
 
-        {/* BUGÜN */}
+        {/* ── BUGÜN ── */}
         {activeTab === 'today' && (
           <div>
             <div style={{ background:'linear-gradient(135deg, #1B3A6B 0%, #2563EB 100%)', borderRadius:'16px', padding:'18px', marginBottom:'14px', color:'#fff' }}>
@@ -394,6 +462,7 @@ export default function StudentPanelPage() {
               </div>
             )}
 
+            {/* Bugünün takvim görevleri */}
             {getCalForDate(todayStr).length > 0 && (
               <div style={{ background:'#fff', borderRadius:'14px', overflow:'hidden', marginBottom:'14px', boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
                 <div style={{ padding:'12px 16px', borderBottom:'1px solid #F0F4F9', display:'flex', alignItems:'center', gap:'8px' }}>
@@ -428,6 +497,7 @@ export default function StudentPanelPage() {
               </div>
             )}
 
+            {/* Günlük Görevler */}
             <div style={{ background:'#fff', borderRadius:'16px', overflow:'hidden', marginBottom:'14px', boxShadow:'0 2px 12px rgba(0,0,0,0.06)' }}>
               <div style={{ padding:'14px 16px', borderBottom:'1px solid #F0F4F9', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                 <div style={{ fontSize:'14px', fontWeight:700, color:'#1B3A6B' }}>📋 Günlük Görevler</div>
@@ -478,10 +548,25 @@ export default function StudentPanelPage() {
                 <span style={{ fontSize:'18px', color:'#B45309' }}>→</span>
               </div>
             )}
+
+            {/* Rozetler */}
+            {badges.length > 0 && (
+              <div style={{ background:'#fff', borderRadius:'14px', padding:'14px 16px', marginTop:'14px', boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
+                <div style={{ fontSize:'13px', fontWeight:700, color:'#1B3A6B', marginBottom:'12px' }}>🏅 Kazanılan Rozetler</div>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:'8px' }}>
+                  {badges.map(sb => (
+                    <div key={sb.id} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'4px', padding:'10px', borderRadius:'12px', background:'#F8FAFF', border:'1px solid #E2EAF8', minWidth:'60px' }}>
+                      <span style={{ fontSize:'24px' }}>{sb.badges?.icon}</span>
+                      <span style={{ fontSize:'9px', fontWeight:600, color:'#1B3A6B', textAlign:'center' }}>{sb.badges?.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* TAKVİM */}
+        {/* ── TAKVİM ── */}
         {activeTab === 'calendar' && (
           <div>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px' }}>
@@ -650,7 +735,7 @@ export default function StudentPanelPage() {
           </div>
         )}
 
-        {/* PERFORMANS */}
+        {/* ── PERFORMANS ── */}
         {activeTab === 'performance' && (
           <div>
             <div style={{ fontSize:'16px', fontWeight:700, color:'#1B3A6B', marginBottom:'14px' }}>📊 Konu Performansım</div>
@@ -688,7 +773,7 @@ export default function StudentPanelPage() {
           </div>
         )}
 
-        {/* ÖDEVLER */}
+        {/* ── ÖDEVLER ── */}
         {activeTab === 'homework' && (
           <div>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px' }}>
@@ -721,7 +806,7 @@ export default function StudentPanelPage() {
           </div>
         )}
 
-        {/* HEDEFLER */}
+        {/* ── HEDEFLER ── */}
         {activeTab === 'goals' && (
           <div>
             <div style={{ fontSize:'16px', fontWeight:700, color:'#1B3A6B', marginBottom:'14px' }}>🎯 Hedeflerim</div>
@@ -758,7 +843,7 @@ export default function StudentPanelPage() {
           </div>
         )}
 
-        {/* SWOT */}
+        {/* ── SWOT ── */}
         {activeTab === 'swot' && (
           <div>
             <div style={{ fontSize:'16px', fontWeight:700, color:'#1B3A6B', marginBottom:'14px' }}>🔍 SWOT Analizim</div>
