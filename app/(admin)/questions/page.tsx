@@ -4,290 +4,344 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-function getMasteryColor(score: number) {
-  if (score >= 80) return { bg:'#DCFCE7', text:'#14532D', border:'#86EFAC', label:'Uzman' }
-  if (score >= 60) return { bg:'#EEF3FB', text:'#1B3A6B', border:'#BFDBFE', label:'İyi' }
-  if (score >= 40) return { bg:'#FEF3C7', text:'#92400E', border:'#FCD34D', label:'Gelişiyor' }
-  return { bg:'#FEF2F2', text:'#7F1D1D', border:'#FECACA', label:'Zayıf' }
-}
-
-export default function PerformancePage() {
-  const [students, setStudents] = useState<any[]>([])
+export default function QuestionsPage() {
+  const [activeTab, setActiveTab] = useState('bank')
+  const [questions, setQuestions] = useState<any[]>([])
   const [subjects, setSubjects] = useState<any[]>([])
-  const [selectedStudent, setSelectedStudent] = useState<any>(null)
-  const [selectedSubject, setSelectedSubject] = useState<any>(null)
-  const [topicPerf, setTopicPerf] = useState<any[]>([])
   const [attempts, setAttempts] = useState<any[]>([])
-  const [aiInsight, setAiInsight] = useState('')
-  const [aiLoading, setAiLoading] = useState(false)
+  const [students, setStudents] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('map')
+  const [saving, setSaving] = useState(false)
+  const [success, setSuccess] = useState('')
+  const [editItem, setEditItem] = useState<any>(null)
+  const [filterSubject, setFilterSubject] = useState('')
+  const [filterStudent, setFilterStudent] = useState('')
+  const [form, setForm] = useState({
+    subject_id: '', question: '',
+    option_a: '', option_b: '', option_c: '', option_d: '',
+    correct_answer: 'A', difficulty: 'medium',
+  })
   const supabase = createClient()
 
   useEffect(() => { load() }, [])
 
   async function load() {
-    const [{ data: s }, { data: sub }] = await Promise.all([
-      supabase.from('profiles').select('*').eq('role', 'student').order('full_name'),
+    const [{ data: q }, { data: sub }, { data: att }, { data: st }] = await Promise.all([
+      supabase.from('verification_questions').select('*, subjects(name)').order('created_at', { ascending: false }),
       supabase.from('subjects').select('*').order('name'),
+      supabase.from('student_question_attempts')
+        .select('*, profiles!student_question_attempts_student_id_fkey(full_name), subjects(name), topics(name)')
+        .order('attempt_date', { ascending: false })
+        .limit(200),
+      supabase.from('profiles').select('id, full_name').eq('role', 'student').order('full_name'),
     ])
-    setStudents(s??[]); setSubjects(sub??[]); setLoading(false)
+    setQuestions(q ?? [])
+    setSubjects(sub ?? [])
+    setAttempts(att ?? [])
+    setStudents(st ?? [])
+    setLoading(false)
   }
 
-  async function selectStudent(s: any) {
-    setSelectedStudent(s); setSelectedSubject(null); setAttempts([]); setAiInsight('')
-    const { data } = await supabase.from('student_topic_performance').select('*, topics(name), subjects(name, color, id)').eq('student_id', s.id).order('mastery_score', { ascending:false })
-    setTopicPerf(data??[])
+  function resetForm() {
+    setForm({ subject_id:'', question:'', option_a:'', option_b:'', option_c:'', option_d:'', correct_answer:'A', difficulty:'medium' })
+    setEditItem(null)
   }
 
-  async function selectSubject(s: any) {
-    setSelectedSubject(s)
-    if (!selectedStudent) return
-    const { data } = await supabase.from('student_question_attempts').select('*, topics(name), subjects(name)').eq('student_id', selectedStudent.id).eq('subject_id', s.id).order('attempt_date', { ascending:false }).limit(30)
-    setAttempts(data??[])
+  function startEdit(q: any) {
+    setEditItem(q)
+    setForm({
+      subject_id: q.subject_id ?? '',
+      question: q.question,
+      option_a: q.option_a ?? '',
+      option_b: q.option_b ?? '',
+      option_c: q.option_c ?? '',
+      option_d: q.option_d ?? '',
+      correct_answer: q.correct_answer ?? 'A',
+      difficulty: q.difficulty ?? 'medium',
+    })
+    setActiveTab('form')
+    window.scrollTo(0, 0)
   }
 
-  async function getAiInsight() {
-    if (!selectedStudent||topicPerf.length===0) return
-    setAiLoading(true); setAiInsight('')
-    const weak = topicPerf.filter(t=>t.accuracy_rate<50).map(t=>t.subjects?.name+'-'+t.topics?.name+'(%'+Math.round(t.accuracy_rate)+'%)').join(', ')
-    const strong = topicPerf.filter(t=>t.accuracy_rate>=70).map(t=>t.topics?.name).join(', ')
-    const totalQ = topicPerf.reduce((s,t)=>s+t.total_questions,0)
-    const totalC = topicPerf.reduce((s,t)=>s+t.correct_count,0)
-    try {
-      const res = await fetch('/api/ai/insight', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ student_name:selectedStudent.full_name, overall_rate:totalQ>0?Math.round(totalC/totalQ*100):0, weak_topics:weak||'Yok', strong_topics:strong||'Yok', total_questions:totalQ }) })
-      const d = await res.json(); setAiInsight(d.insight??'')
-    } catch { setAiInsight('AI analizi alınamadı.') }
-    setAiLoading(false)
+  async function handleSave() {
+    if (!form.question || !form.option_a || !form.option_b) {
+      setSuccess('Soru metni ve en az A-B seçeneği zorunludur!')
+      return
+    }
+    setSaving(true); setSuccess('')
+    const payload = {
+      subject_id: form.subject_id || null,
+      question: form.question,
+      option_a: form.option_a,
+      option_b: form.option_b,
+      option_c: form.option_c || null,
+      option_d: form.option_d || null,
+      correct_answer: form.correct_answer,
+      difficulty: form.difficulty,
+      tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
+    }
+    if (editItem) {
+      await supabase.from('verification_questions').update(payload).eq('id', editItem.id)
+      setSuccess('Soru güncellendi.')
+    } else {
+      await supabase.from('verification_questions').insert(payload)
+      setSuccess('Soru eklendi.')
+    }
+    resetForm(); await load(); setSaving(false)
+    setTimeout(() => setSuccess(''), 3000)
   }
 
-  const totalQuestions = topicPerf.reduce((s,t)=>s+t.total_questions,0)
-  const totalCorrect = topicPerf.reduce((s,t)=>s+t.correct_count,0)
-  const totalWrong = topicPerf.reduce((s,t)=>s+t.wrong_count,0)
-  const overallRate = totalQuestions>0 ? Math.round(totalCorrect/totalQuestions*100) : 0
-  const weakCount = topicPerf.filter(t=>t.accuracy_rate<50).length
-  const strongCount = topicPerf.filter(t=>t.accuracy_rate>=70).length
+  async function handleDelete(id: string) {
+    if (!confirm('Bu soruyu silmek istiyor musunuz?')) return
+    await supabase.from('verification_questions').delete().eq('id', id)
+    await load()
+  }
 
-  const subjectGroups = topicPerf.reduce((acc:any, t) => {
-    const name = t.subjects?.name??'Diğer'
-    if (!acc[name]) acc[name] = { topics:[], color:t.subjects?.color??'#1B3A6B' }
-    acc[name].topics.push(t)
-    return acc
-  }, {})
+  const filteredQ = questions.filter(q => !filterSubject || q.subject_id === filterSubject)
+  const filteredAtt = attempts.filter(a =>
+    (!filterStudent || a.student_id === filterStudent) &&
+    (!filterSubject || a.subject_id === filterSubject)
+  )
 
-  if (loading) return <div style={{ padding:'40px', textAlign:'center', color:'#7A8FA8' }}>Yükleniyor...</div>
+  const diffBg: any  = { easy:'#DCFCE7', medium:'#FEF3C7', hard:'#FEF2F2' }
+  const diffTc: any  = { easy:'#14532D', medium:'#78350F', hard:'#7F1D1D' }
+  const diffLbl: any = { easy:'Kolay',   medium:'Orta',    hard:'Zor'    }
+
+  const inp: React.CSSProperties = { width:'100%', padding:'9px 12px', borderRadius:'8px', border:'1px solid #E2E8F0', fontSize:'13px', color:'#1E293B', outline:'none', background:'#fff', boxSizing:'border-box', fontFamily:'inherit' }
+  const lbl: React.CSSProperties = { display:'block', fontSize:'11px', fontWeight:600, color:'#475569', marginBottom:'5px', textTransform:'uppercase', letterSpacing:'0.4px' }
+
+  // ── Stats
+  const totalQ = questions.length
+  const totalAtt = attempts.length
+  const avgAcc = totalAtt > 0 ? Math.round(attempts.reduce((s, a) => s + (a.total_questions > 0 ? a.correct_count / a.total_questions * 100 : 0), 0) / totalAtt) : 0
+
+  const TABS = [
+    { id:'bank',  label:'Soru Bankası' },
+    { id:'form',  label: editItem ? 'Soruyu Düzenle' : 'Yeni Soru Ekle' },
+    { id:'stats', label:'Çözüm İstatistikleri' },
+  ]
+
+  if (loading) return (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'60vh', color:'#94A3B8', fontSize:'14px' }}>
+      Yükleniyor...
+    </div>
+  )
 
   return (
-    <div className="admin-page">
+    <div style={{ padding:'24px', maxWidth:'960px', fontFamily:'-apple-system, BlinkMacSystemFont, "Inter", sans-serif' }}>
+
+      {/* Başlık */}
       <div style={{ marginBottom:'20px' }}>
-        <h1>Hakimiyet Haritası</h1>
-        <p style={{ fontSize:'12px', color:'#7A8FA8', margin:'3px 0 0' }}>Konu bazlı performans ve soru çözüm analizi</p>
+        <h1 style={{ fontSize:'20px', fontWeight:700, color:'#1B3A6B', margin:0 }}>Soru Bankası</h1>
+        <p style={{ fontSize:'13px', color:'#94A3B8', margin:'4px 0 0' }}>Doğrulama soruları ve soru çözüm istatistikleri</p>
       </div>
 
-      {/* Mobil: öğrenci dropdown */}
-      <div className="sidebar-dropdown">
-        <select value={selectedStudent?.id??''} onChange={e => { const s=students.find(x=>x.id===e.target.value); if(s) selectStudent(s) }}>
-          <option value="">Öğrenci seçin...</option>
-          {students.map(s=><option key={s.id} value={s.id}>{s.full_name}</option>)}
-        </select>
+      {/* Metrikler */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'12px', marginBottom:'20px' }}>
+        {[
+          { label:'Soru Bankası', value:totalQ, color:'#1B3A6B', bg:'#EEF3FB' },
+          { label:'Toplam Çözüm', value:totalAtt, color:'#2E7D52', bg:'#DCFCE7' },
+          { label:'Ort. Başarı', value:`%${avgAcc}`, color:'#78350F', bg:'#FEF3C7' },
+        ].map(m => (
+          <div key={m.label} style={{ background:m.bg, borderRadius:'10px', padding:'14px 16px', border:'1px solid rgba(0,0,0,0.06)' }}>
+            <div style={{ fontSize:'24px', fontWeight:700, color:m.color }}>{m.value}</div>
+            <div style={{ fontSize:'11px', color:'#64748B', marginTop:'3px' }}>{m.label}</div>
+          </div>
+        ))}
       </div>
 
-      <div className="sidebar-layout">
-        {/* Sol: öğrenci listesi */}
-        <div className="sidebar-list">
-          <div style={{ background:'#fff', borderRadius:'12px', border:'1px solid #E2E8F0', overflow:'hidden' }}>
-            <div style={{ padding:'12px 16px', borderBottom:'1px solid #F1F5F9', fontSize:'12.5px', fontWeight:700, color:'#1B3A6B' }}>
-              Öğrenci Seç ({students.length})
+      {/* Sekmeler */}
+      <div style={{ display:'flex', gap:'4px', background:'#F1F5F9', borderRadius:'10px', padding:'4px', marginBottom:'20px' }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setActiveTab(t.id)}
+            style={{ flex:1, padding:'8px 12px', borderRadius:'7px', border:'none', background:activeTab===t.id?'#fff':'transparent', color:activeTab===t.id?'#1B3A6B':'#64748B', fontSize:'13px', fontWeight:activeTab===t.id?600:400, cursor:'pointer', boxShadow:activeTab===t.id?'0 1px 4px rgba(0,0,0,0.08)':'none', transition:'all 0.15s' }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── SORU BANKASI ── */}
+      {activeTab === 'bank' && (
+        <div>
+          <div style={{ display:'flex', gap:'10px', marginBottom:'14px' }}>
+            <select value={filterSubject} onChange={e => setFilterSubject(e.target.value)} style={{ ...inp, flex:1 }}>
+              <option value="">Tüm Dersler</option>
+              {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            <button onClick={() => { resetForm(); setActiveTab('form') }}
+              style={{ padding:'9px 18px', borderRadius:'8px', background:'#1B3A6B', color:'#fff', fontSize:'13px', fontWeight:600, border:'none', cursor:'pointer', whiteSpace:'nowrap' }}>
+              + Yeni Soru
+            </button>
+          </div>
+
+          {success && (
+            <div style={{ background:'#DCFCE7', border:'1px solid #86EFAC', borderRadius:'8px', padding:'10px 14px', marginBottom:'12px', fontSize:'13px', color:'#14532D', fontWeight:600 }}>
+              {success}
             </div>
-            <div style={{ maxHeight:'340px', overflowY:'auto' }}>
-              {students.map(s => (
-                <div key={s.id} onClick={() => selectStudent(s)} style={{ padding:'10px 16px', borderBottom:'1px solid #F8FAFC', cursor:'pointer', display:'flex', alignItems:'center', gap:'10px', background:selectedStudent?.id===s.id?'#F5F8FF':'#fff', borderLeft:selectedStudent?.id===s.id?'3px solid #1B3A6B':'3px solid transparent' }}>
-                  <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:selectedStudent?.id===s.id?'#1B3A6B':'#EEF3FB', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px', fontWeight:700, color:selectedStudent?.id===s.id?'#fff':'#1B3A6B', flexShrink:0 }}>
-                    {s.full_name?.split(' ').map((n:string)=>n[0]).join('').slice(0,2)}
+          )}
+
+          {filteredQ.length === 0 ? (
+            <div style={{ background:'#F8FAFC', borderRadius:'12px', padding:'48px', textAlign:'center', border:'1px solid #E2E8F0' }}>
+              <div style={{ fontSize:'14px', color:'#94A3B8', marginBottom:'12px' }}>Soru bankası boş</div>
+              <button onClick={() => setActiveTab('form')} style={{ padding:'9px 18px', borderRadius:'8px', background:'#1B3A6B', color:'#fff', fontSize:'13px', fontWeight:600, border:'none', cursor:'pointer' }}>
+                İlk Soruyu Ekle
+              </button>
+            </div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
+              {filteredQ.map(q => (
+                <div key={q.id} style={{ background:'#fff', borderRadius:'10px', padding:'14px 16px', border:'1px solid #E2E8F0' }}>
+                  <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'12px', marginBottom:'8px' }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:'13px', fontWeight:600, color:'#1E293B', marginBottom:'4px', lineHeight:1.5 }}>{q.question}</div>
+                      <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
+                        {q.subjects?.name && (
+                          <span style={{ fontSize:'11px', padding:'2px 8px', borderRadius:'4px', background:'#EEF3FB', color:'#1B3A6B', fontWeight:600 }}>{q.subjects.name}</span>
+                        )}
+                        <span style={{ fontSize:'11px', padding:'2px 8px', borderRadius:'4px', background:diffBg[q.difficulty], color:diffTc[q.difficulty], fontWeight:600 }}>{diffLbl[q.difficulty]}</span>
+                        <span style={{ fontSize:'11px', padding:'2px 8px', borderRadius:'4px', background:'#F1F5F9', color:'#475569', fontWeight:600 }}>Cevap: {q.correct_answer}</span>
+                      </div>
+                    </div>
+                    <div style={{ display:'flex', gap:'6px', flexShrink:0 }}>
+                      <button onClick={() => startEdit(q)} style={{ padding:'5px 12px', borderRadius:'6px', background:'#EEF3FB', color:'#1B3A6B', fontSize:'12px', fontWeight:600, border:'1px solid #BFDBFE', cursor:'pointer' }}>Düzenle</button>
+                      <button onClick={() => handleDelete(q.id)} style={{ padding:'5px 12px', borderRadius:'6px', background:'#FEF2F2', color:'#7F1D1D', fontSize:'12px', fontWeight:600, border:'1px solid #FECACA', cursor:'pointer' }}>Sil</button>
+                    </div>
                   </div>
-                  <span style={{ fontSize:'12.5px', fontWeight:selectedStudent?.id===s.id?700:500, color:'#1B3A6B' }}>{s.full_name}</span>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'4px' }}>
+                    {['a','b','c','d'].filter(opt => q[`option_${opt}`]).map(opt => (
+                      <div key={opt} style={{ fontSize:'12px', padding:'4px 8px', borderRadius:'5px', background: q.correct_answer === opt.toUpperCase() ? '#DCFCE7' : '#F8FAFC', color: q.correct_answer === opt.toUpperCase() ? '#14532D' : '#64748B', border:`1px solid ${q.correct_answer === opt.toUpperCase() ? '#86EFAC' : '#E2E8F0'}` }}>
+                        <strong>{opt.toUpperCase()})</strong> {q[`option_${opt}`]}
+                      </div>
+                    ))}
+                  </div>
                 </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── FORM ── */}
+      {activeTab === 'form' && (
+        <div style={{ background:'#fff', borderRadius:'12px', padding:'20px', border:'1px solid #E2E8F0' }}>
+          <div style={{ fontSize:'15px', fontWeight:700, color:'#1B3A6B', marginBottom:'16px' }}>
+            {editItem ? 'Soruyu Düzenle' : 'Yeni Doğrulama Sorusu'}
+          </div>
+
+          {success && (
+            <div style={{ background:'#DCFCE7', border:'1px solid #86EFAC', borderRadius:'8px', padding:'10px 14px', marginBottom:'14px', fontSize:'13px', color:'#14532D', fontWeight:600 }}>
+              {success}
+            </div>
+          )}
+
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px', marginBottom:'12px' }}>
+            <div>
+              <label style={lbl}>Ders (İsteğe Bağlı)</label>
+              <select value={form.subject_id} onChange={e => setForm(p => ({ ...p, subject_id:e.target.value }))} style={inp}>
+                <option value="">Genel (Ders Bağımsız)</option>
+                {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={lbl}>Zorluk</label>
+              <select value={form.difficulty} onChange={e => setForm(p => ({ ...p, difficulty:e.target.value }))} style={inp}>
+                <option value="easy">Kolay</option>
+                <option value="medium">Orta</option>
+                <option value="hard">Zor</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ marginBottom:'12px' }}>
+            <label style={lbl}>Soru Metni *</label>
+            <textarea value={form.question} onChange={e => setForm(p => ({ ...p, question:e.target.value }))} placeholder="Soruyu yazın..." rows={3} style={{ ...inp, resize:'vertical' }} />
+          </div>
+
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px', marginBottom:'12px' }}>
+            {['a','b','c','d'].map(opt => (
+              <div key={opt}>
+                <label style={lbl}>{opt.toUpperCase()} Şıkkı {opt === 'a' || opt === 'b' ? '*' : '(İsteğe bağlı)'}</label>
+                <input value={form[`option_${opt}` as keyof typeof form]} onChange={e => setForm(p => ({ ...p, [`option_${opt}`]: e.target.value }))} placeholder={`${opt.toUpperCase()} şıkkını yazın`} style={inp} />
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginBottom:'16px' }}>
+            <label style={lbl}>Doğru Cevap *</label>
+            <div style={{ display:'flex', gap:'8px' }}>
+              {['A','B','C','D'].map(opt => (
+                <button key={opt} type="button" onClick={() => setForm(p => ({ ...p, correct_answer:opt }))}
+                  style={{ flex:1, padding:'10px', borderRadius:'8px', border:'2px solid', borderColor:form.correct_answer===opt?'#14532D':'#E2E8F0', background:form.correct_answer===opt?'#DCFCE7':'#F8FAFC', color:form.correct_answer===opt?'#14532D':'#64748B', fontSize:'14px', fontWeight:700, cursor:'pointer' }}>
+                  {opt}
+                </button>
               ))}
             </div>
           </div>
-          {selectedStudent&&topicPerf.length>0 && (
-            <div style={{ marginTop:'10px', background:'#fff', borderRadius:'12px', border:'1px solid #E2E8F0', padding:'12px' }}>
-              <div style={{ fontSize:'12px', fontWeight:700, color:'#1B3A6B', marginBottom:'8px' }}>Genel Özet</div>
-              {[
-                { label:'Toplam Soru', value:totalQuestions, color:'#1B3A6B' },
-                { label:'Doğru', value:totalCorrect, color:'#2E7D52' },
-                { label:'Yanlış', value:totalWrong, color:'#C0392B' },
-                { label:'Başarı', value:'%'+overallRate, color:overallRate>=70?'#2E7D52':overallRate>=50?'#B45309':'#C0392B' },
-                { label:'Zayıf Konu', value:weakCount, color:'#C0392B' },
-                { label:'Güçlü Konu', value:strongCount, color:'#2E7D52' },
-              ].map(m => (
-                <div key={m.label} style={{ display:'flex', justifyContent:'space-between', padding:'4px 0', borderBottom:'1px solid #F8FAFC', fontSize:'12px' }}>
-                  <span style={{ color:'#7A8FA8' }}>{m.label}</span>
-                  <span style={{ fontWeight:700, color:m.color }}>{m.value}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
 
-        {/* Sağ panel */}
+          <div style={{ display:'flex', gap:'10px' }}>
+            <button onClick={handleSave} disabled={saving}
+              style={{ flex:1, padding:'11px', borderRadius:'8px', background:'#1B3A6B', color:'#fff', fontSize:'13px', fontWeight:600, border:'none', cursor:'pointer' }}>
+              {saving ? 'Kaydediliyor...' : editItem ? 'Güncelle' : 'Soruyu Kaydet'}
+            </button>
+            <button onClick={() => { resetForm(); setActiveTab('bank') }}
+              style={{ padding:'11px 20px', borderRadius:'8px', background:'#F1F5F9', color:'#475569', fontSize:'13px', fontWeight:600, border:'1px solid #E2E8F0', cursor:'pointer' }}>
+              İptal
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── İSTATİSTİKLER ── */}
+      {activeTab === 'stats' && (
         <div>
-          {!selectedStudent ? (
-            <div style={{ background:'#F8FAFC', borderRadius:'12px', border:'1px solid #E2E8F0', padding:'48px', textAlign:'center' }}>
-              <div style={{ fontSize:'14px', color:'#7A8FA8' }}>Öğrenci seçin</div>
-            </div>
-          ) : topicPerf.length===0 ? (
-            <div style={{ background:'#FEF3C7', border:'1px solid #FCD34D', borderRadius:'12px', padding:'40px', textAlign:'center' }}>
-              <div style={{ fontSize:'14px', color:'#92400E' }}>Henüz soru çözüm verisi yok</div>
+          <div style={{ display:'flex', gap:'10px', marginBottom:'14px' }}>
+            <select value={filterStudent} onChange={e => setFilterStudent(e.target.value)} style={{ ...inp, flex:1 }}>
+              <option value="">Tüm Öğrenciler</option>
+              {students.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+            </select>
+            <select value={filterSubject} onChange={e => setFilterSubject(e.target.value)} style={{ ...inp, flex:1 }}>
+              <option value="">Tüm Dersler</option>
+              {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+
+          {filteredAtt.length === 0 ? (
+            <div style={{ background:'#F8FAFC', borderRadius:'12px', padding:'48px', textAlign:'center', border:'1px solid #E2E8F0', color:'#94A3B8', fontSize:'14px' }}>
+              Henüz soru çözüm kaydı yok
             </div>
           ) : (
-            <>
-              {/* Seçili öğrenci özet - mobilde görünür */}
-              <div style={{ background:'#fff', borderRadius:'10px', border:'1px solid #E2E8F0', padding:'12px 14px', marginBottom:'12px', display:'flex', gap:'8px', flexWrap:'wrap' }} className="mobile-summary">
-                {[
-                  { label:'Soru', value:totalQuestions, color:'#1B3A6B' },
-                  { label:'Doğru', value:totalCorrect, color:'#2E7D52' },
-                  { label:'Başarı', value:'%'+overallRate, color:overallRate>=70?'#2E7D52':overallRate>=50?'#B45309':'#C0392B' },
-                  { label:'Zayıf', value:weakCount, color:'#C0392B' },
-                ].map(m => (
-                  <div key={m.label} style={{ flex:1, minWidth:'60px', textAlign:'center', padding:'6px', background:'#F8FAFC', borderRadius:'8px' }}>
-                    <div style={{ fontSize:'16px', fontWeight:800, color:m.color }}>{m.value}</div>
-                    <div style={{ fontSize:'10px', color:'#7A8FA8' }}>{m.label}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Tab bar */}
-              <div style={{ display:'flex', gap:'4px', marginBottom:'14px', background:'#F1F5F9', borderRadius:'10px', padding:'4px' }}>
-                {[{ id:'map', label:'Hakimiyet' }, { id:'trend', label:'Soru Geçmişi' }, { id:'ai', label:'AI Analizi' }].map(tab => (
-                  <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ flex:1, padding:'8px 4px', borderRadius:'7px', border:'none', cursor:'pointer', background:activeTab===tab.id?'#fff':'transparent', color:activeTab===tab.id?'#1B3A6B':'#7A8FA8', fontSize:'12px', fontWeight:activeTab===tab.id?700:500 }}>
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              {activeTab === 'map' && (
-                <div>
-                  {Object.entries(subjectGroups).map(([sName, sData]: [string, any]) => (
-                    <div key={sName} style={{ background:'#fff', borderRadius:'12px', border:'1px solid #E2E8F0', overflow:'hidden', marginBottom:'12px' }}>
-                      <div style={{ height:'3px', background:sData.color }} />
-                      <div style={{ padding:'10px 14px', borderBottom:'1px solid #F1F5F9', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                        <span style={{ fontSize:'13px', fontWeight:700, color:'#1B3A6B' }}>{sName}</span>
-                        <span style={{ fontSize:'11px', color:'#7A8FA8' }}>{sData.topics.length} konu</span>
+            <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
+              {filteredAtt.map(a => {
+                const acc = a.total_questions > 0 ? Math.round(a.correct_count / a.total_questions * 100) : 0
+                const color = acc >= 70 ? '#14532D' : acc >= 50 ? '#78350F' : '#7F1D1D'
+                const bg    = acc >= 70 ? '#DCFCE7' : acc >= 50 ? '#FEF3C7' : '#FEF2F2'
+                return (
+                  <div key={a.id} style={{ background:'#fff', borderRadius:'10px', padding:'12px 16px', border:'1px solid #E2E8F0', display:'flex', alignItems:'center', gap:'12px' }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:'13px', fontWeight:600, color:'#1E293B', marginBottom:'2px' }}>
+                        {a.profiles?.full_name ?? '—'}
                       </div>
-                      <div style={{ padding:'12px', display:'grid', gap:'8px' }} className="topics-grid">
-                        {sData.topics.map((t: any) => {
-                          const mc = getMasteryColor(t.mastery_score)
-                          const pct = Math.min(Math.round(t.accuracy_rate), 100)
-                          return (
-                            <div key={t.id} style={{ background:mc.bg, borderRadius:'10px', padding:'10px 12px', border:'1px solid '+mc.border }}>
-                              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:'6px' }}>
-                                <span style={{ fontSize:'12.5px', fontWeight:700, color:mc.text }}>{t.topics?.name}</span>
-                                <span style={{ fontSize:'10px', fontWeight:700, padding:'1px 6px', borderRadius:'8px', background:'rgba(255,255,255,0.7)', color:mc.text }}>{mc.label}</span>
-                              </div>
-                              <div style={{ height:'5px', background:'rgba(0,0,0,0.08)', borderRadius:'3px', overflow:'hidden', marginBottom:'6px' }}>
-                                <div style={{ height:'100%', width:pct+'%', background:mc.text, borderRadius:'3px' }} />
-                              </div>
-                              <div style={{ display:'flex', justifyContent:'space-between', fontSize:'11px', color:mc.text, marginBottom:'5px' }}>
-                                <span>%{pct}</span>
-                                <span>{t.total_questions} soru</span>
-                              </div>
-                              <div style={{ display:'flex', gap:'4px' }}>
-                                <span style={{ fontSize:'10px', padding:'1px 5px', borderRadius:'6px', background:'#DCFCE7', color:'#14532D' }}>D:{t.correct_count}</span>
-                                <span style={{ fontSize:'10px', padding:'1px 5px', borderRadius:'6px', background:'#FEF2F2', color:'#7F1D1D' }}>Y:{t.wrong_count}</span>
-                                <span style={{ fontSize:'10px', padding:'1px 5px', borderRadius:'6px', background:'#F1F5F9', color:'#475569' }}>B:{t.blank_count}</span>
-                              </div>
-                            </div>
-                          )
-                        })}
+                      <div style={{ fontSize:'11px', color:'#94A3B8' }}>
+                        {a.subjects?.name ?? 'Genel'}{a.topics?.name ? ' · ' + a.topics.name : ''} · {a.attempt_date}
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-
-              {activeTab === 'trend' && (
-                <div>
-                  <div style={{ display:'flex', gap:'6px', marginBottom:'12px', flexWrap:'wrap' }}>
-                    {subjects.filter(s=>topicPerf.some(t=>t.subject_id===s.id)).map(s => (
-                      <button key={s.id} onClick={() => selectSubject(s)} style={{ padding:'6px 12px', borderRadius:'20px', border:'1.5px solid', cursor:'pointer', fontSize:'12px', fontWeight:600, background:selectedSubject?.id===s.id?s.color:'#fff', color:selectedSubject?.id===s.id?'#fff':'#475569', borderColor:selectedSubject?.id===s.id?s.color:'#E2E8F0' }}>
-                        {s.name}
-                      </button>
-                    ))}
-                  </div>
-                  {attempts.length===0 ? (
-                    <div style={{ background:'#F8FAFC', borderRadius:'12px', border:'1px solid #E2E8F0', padding:'32px', textAlign:'center', color:'#7A8FA8', fontSize:'13px' }}>Ders seçin</div>
-                  ) : (
-                    <div style={{ background:'#fff', borderRadius:'12px', border:'1px solid #E2E8F0', overflow:'hidden' }}>
-                      {attempts.map((a,i) => {
-                        const rate = a.total_questions>0 ? Math.round(a.correct_count/a.total_questions*100) : 0
-                        return (
-                          <div key={a.id} style={{ padding:'11px 14px', borderBottom:i<attempts.length-1?'1px solid #F8FAFC':'none', display:'flex', alignItems:'center', gap:'10px' }}>
-                            <div style={{ width:'40px', height:'40px', borderRadius:'9px', background:rate>=70?'#DCFCE7':rate>=50?'#FEF3C7':'#FEF2F2', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px', fontWeight:800, color:rate>=70?'#14532D':rate>=50?'#92400E':'#7F1D1D', flexShrink:0 }}>
-                              %{rate}
-                            </div>
-                            <div style={{ flex:1, minWidth:0 }}>
-                              <div style={{ fontSize:'12.5px', fontWeight:600, color:'#1B3A6B', marginBottom:'2px' }}>{a.topics?.name??'Genel'} — {a.difficulty_level}</div>
-                              <div style={{ display:'flex', gap:'8px', fontSize:'11px' }}>
-                                <span style={{ color:'#2E7D52' }}>D:{a.correct_count}</span>
-                                <span style={{ color:'#C0392B' }}>Y:{a.wrong_count}</span>
-                                <span style={{ color:'#7A8FA8' }}>B:{a.blank_count}</span>
-                                <span style={{ color:'#7A8FA8' }}>T:{a.total_questions}</span>
-                              </div>
-                            </div>
-                            <div style={{ fontSize:'11px', color:'#94A3B8', flexShrink:0 }}>{new Date(a.attempt_date).toLocaleDateString('tr-TR')}</div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {activeTab === 'ai' && (
-                <div>
-                  <div style={{ background:'#EDE9FE', border:'1px solid #C4B5FD', borderRadius:'12px', padding:'16px', marginBottom:'14px' }}>
-                    <div style={{ fontSize:'13px', fontWeight:700, color:'#6B4FC8', marginBottom:'8px' }}>AI Akademik Analiz</div>
-                    <button onClick={getAiInsight} disabled={aiLoading} style={{ padding:'9px 18px', borderRadius:'8px', background:'#6B4FC8', color:'#fff', fontSize:'13px', fontWeight:600, border:'none', cursor:'pointer' }}>
-                      {aiLoading?'Analiz Yapılıyor...':'AI Analizi Başlat'}
-                    </button>
-                  </div>
-                  {aiInsight && (
-                    <div style={{ background:'#fff', borderRadius:'12px', border:'1px solid #E2E8F0', padding:'16px', marginBottom:'12px' }}>
-                      <div style={{ fontSize:'13px', fontWeight:700, color:'#1B3A6B', marginBottom:'10px' }}>Analiz Sonucu</div>
-                      <div style={{ fontSize:'13px', color:'#374151', lineHeight:1.8, whiteSpace:'pre-wrap' }}>{aiInsight}</div>
-                    </div>
-                  )}
-                  <div style={{ background:'#fff', borderRadius:'12px', border:'1px solid #E2E8F0', padding:'14px' }}>
-                    <div style={{ fontSize:'13px', fontWeight:700, color:'#1B3A6B', marginBottom:'10px' }}>Risk Alanları</div>
-                    {topicPerf.filter(t=>t.accuracy_rate<50).length===0 ? (
-                      <div style={{ fontSize:'12.5px', color:'#2E7D52' }}>Kritik risk alanı yok!</div>
-                    ) : topicPerf.filter(t=>t.accuracy_rate<50).map(t => (
-                      <div key={t.id} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'8px 0', borderBottom:'1px solid #F8FAFC' }}>
-                        <div style={{ width:'6px', height:'6px', borderRadius:'50%', background:'#C0392B', flexShrink:0 }} />
-                        <div style={{ flex:1 }}>
-                          <div style={{ fontSize:'12.5px', fontWeight:600, color:'#1B3A6B' }}>{t.subjects?.name} — {t.topics?.name}</div>
-                          <div style={{ fontSize:'11px', color:'#7A8FA8' }}>{t.total_questions} soru — %{Math.round(t.accuracy_rate)} başarı</div>
-                        </div>
-                        <span style={{ fontSize:'11px', fontWeight:700, padding:'2px 8px', borderRadius:'20px', background:'#FEF2F2', color:'#C0392B' }}>Risk</span>
+                    <div style={{ display:'flex', gap:'8px', alignItems:'center', flexShrink:0 }}>
+                      <div style={{ display:'flex', gap:'4px' }}>
+                        <span style={{ fontSize:'11px', padding:'2px 7px', borderRadius:'4px', background:'#DCFCE7', color:'#14532D', fontWeight:600 }}>{a.correct_count}D</span>
+                        <span style={{ fontSize:'11px', padding:'2px 7px', borderRadius:'4px', background:'#FEF2F2', color:'#7F1D1D', fontWeight:600 }}>{a.wrong_count}Y</span>
+                        <span style={{ fontSize:'11px', padding:'2px 7px', borderRadius:'4px', background:'#F1F5F9', color:'#475569', fontWeight:600 }}>{a.blank_count}B</span>
                       </div>
-                    ))}
+                      <span style={{ fontSize:'13px', fontWeight:700, padding:'3px 10px', borderRadius:'6px', background:bg, color, minWidth:'42px', textAlign:'center' }}>
+                        %{acc}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              )}
-            </>
+                )
+              })}
+            </div>
           )}
         </div>
-      </div>
-
-      <style>{`
-        .mobile-summary { display: flex; }
-        .topics-grid { grid-template-columns: 1fr; }
-        @media (min-width: 768px) {
-          .mobile-summary { display: none; }
-          .topics-grid { grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); }
-        }
-      `}</style>
+      )}
     </div>
   )
 }
