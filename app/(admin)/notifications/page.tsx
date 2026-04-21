@@ -32,7 +32,7 @@ export default function NotificationsPage() {
     const [{ data: p }, { data: h }] = await Promise.all([
       supabase.from('profiles')
         .select('id, full_name, phone_number, whatsapp_enabled, role')
-        .in('role', ['parent', 'student'])
+        .in('role', ['parent', 'student', 'admin', 'teacher'])
         .order('full_name'),
       supabase.from('whatsapp_notifications')
         .select('*, profiles!whatsapp_notifications_recipient_id_fkey(full_name)')
@@ -47,7 +47,18 @@ export default function NotificationsPage() {
     const phone = phoneEdit[profileId]?.trim()
     if (!phone) return
     setSavingPhone(profileId)
-    await supabase.from('profiles').update({ phone_number: phone, whatsapp_enabled: true }).eq('id', profileId)
+  
+    const { error } = await supabase
+      .from('profiles')
+      .update({ phone_number: phone, whatsapp_enabled: true })
+      .eq('id', profileId)
+  
+    if (error) {
+      alert('Kayıt hatası: ' + error.message)
+      setSavingPhone(null)
+      return
+    }
+  
     await load()
     setSavingPhone(null)
     setPhoneEdit(prev => { const n = {...prev}; delete n[profileId]; return n })
