@@ -39,55 +39,78 @@ export default function ReportsPage() {
 
   async function generateReport(type: string) {
     setGenerating(true); setActiveReport(type); setReportData(null)
-
+  
+    // Sınıf filtresine göre öğrenci ID'lerini bul
+    let studentIds: string[] = []
+    if (filterStudent) {
+      studentIds = [filterStudent]
+    } else if (filterClass) {
+      studentIds = students.filter(s => String(s.grade_level) === filterClass).map(s => s.id)
+    }
+  
     if (type === 'performance') {
-      const query = supabase.from('student_topic_performance')
+      let query = supabase
+        .from('student_topic_performance')
         .select('*, profiles!student_topic_performance_student_id_fkey(full_name, grade_level), subjects(name), topics(name)')
         .order('accuracy_rate', { ascending: true })
-      if (filterStudent) query.eq('student_id', filterStudent)
-      if (filterSubject) query.eq('subject_id', filterSubject)
+  
+      if (studentIds.length > 0) query = query.in('student_id', studentIds)
+      if (filterSubject) query = query.eq('subject_id', filterSubject)
+  
       const { data } = await query
       setReportData(data ?? [])
     }
-
+  
     if (type === 'homework') {
-      const query = supabase.from('homework_assignments')
+      let query = supabase
+        .from('homework_assignments')
         .select('*, profiles!homework_assignments_student_id_fkey(full_name, grade_level), tests(name, chapters(name, books(name)))')
         .order('created_at', { ascending: false })
-      if (filterStudent) query.eq('student_id', filterStudent)
+  
+      if (studentIds.length > 0) query = query.in('student_id', studentIds)
+  
       const { data } = await query
       setReportData(data ?? [])
     }
-
+  
     if (type === 'attendance') {
-      const query = supabase.from('study_calendar')
+      let query = supabase
+        .from('study_calendar')
         .select('*, profiles!study_calendar_student_id_fkey(full_name, grade_level), subjects(name)')
         .gte('calendar_date', dateFrom)
         .lte('calendar_date', dateTo)
         .order('calendar_date', { ascending: false })
-      if (filterStudent) query.eq('student_id', filterStudent)
+  
+      if (studentIds.length > 0) query = query.in('student_id', studentIds)
+  
       const { data } = await query
       setReportData(data ?? [])
     }
-
+  
     if (type === 'risk') {
-      const targetStudents = filterStudent
-        ? students.filter(s => s.id === filterStudent)
-        : filterClass
-          ? students.filter(s => String(s.grade_level) === filterClass)
-          : students
+      const targetStudents = studentIds.length > 0
+        ? students.filter(s => studentIds.includes(s.id))
+        : students
+  
       const result = []
       for (const s of targetStudents.slice(0, 20)) {
         const { data: riskData } = await supabase.rpc('calculate_risk_score', { p_student_id: s.id })
-        const { data: tp } = await supabase.from('student_topic_performance').select('accuracy_rate, total_questions').eq('student_id', s.id)
+        const { data: tp } = await supabase
+          .from('student_topic_performance')
+          .select('accuracy_rate, total_questions')
+          .eq('student_id', s.id)
         const totalQ = (tp ?? []).reduce((sum: number, t: any) => sum + t.total_questions, 0)
         const totalC = (tp ?? []).reduce((sum: number, t: any) => sum + (t.total_questions * t.accuracy_rate / 100), 0)
-        result.push({ ...s, risk_score: Math.round(riskData ?? 0), overall_rate: totalQ > 0 ? Math.round(totalC/totalQ*100) : 0 })
+        result.push({
+          ...s,
+          risk_score: Math.round(riskData ?? 0),
+          overall_rate: totalQ > 0 ? Math.round(totalC / totalQ * 100) : 0,
+        })
       }
       result.sort((a, b) => b.risk_score - a.risk_score)
       setReportData(result)
     }
-
+  
     setGenerating(false)
   }
 
