@@ -155,6 +155,11 @@ export default function StudentPanelPage() {
   const [newBadge, setNewBadge] = useState<any>(null)
   const supabase = createClient()
   const todayStr = localDate()
+  const [coachMessages, setCoachMessages] = useState<{role:'user'|'ai', text:string}[]>([
+    { role:'ai', text:`Merhaba! Ben senin kişisel AI koçunum 🤖\n\nSana akademik konularda yardımcı olmak için buradayım. Zayıf konuların, çalışma planın veya motivasyon için her şeyi sorabilirsin!` }
+  ])
+  const [coachInput, setCoachInput] = useState('')
+  const [coachLoading, setCoachLoading] = useState(false)
 
   useEffect(() => { load() }, [])
 
@@ -248,6 +253,36 @@ export default function StudentPanelPage() {
     setVerifyItem(item)
   }
 
+  async function sendCoachMessage() {
+    if (!coachInput.trim() || coachLoading) return
+    const userMsg = coachInput.trim()
+    setCoachInput('')
+    setCoachMessages(prev => [...prev, { role:'user', text:userMsg }])
+    setCoachLoading(true)
+  
+    try {
+      const res = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'coach',
+          student_name: profile?.full_name?.split(' ')[0],
+          overall_rate: overallRate,
+          streak: streak?.current_streak ?? 0,
+          weak_topics: weakTopics.map(t => t.subjects?.name + ' - ' + t.topics?.name).join(', '),
+          strong_topics: strongTopics.map(t => t.topics?.name).join(', '),
+          pending_homework: pendingHw,
+          daily_score: dailyScore,
+          user_message: userMsg,
+        }),
+      })
+      const data = await res.json()
+      setCoachMessages(prev => [...prev, { role:'ai', text: data.response ?? 'Üzgünüm, bir hata oluştu.' }])
+    } catch {
+      setCoachMessages(prev => [...prev, { role:'ai', text: 'Bağlantı hatası. Lütfen tekrar dene.' }])
+    }
+    setCoachLoading(false)
+  }
   async function completeTask(taskId: string) {
     const task = dailyTasks.find(t => t.id === taskId)
     if (!task) return
@@ -319,12 +354,13 @@ export default function StudentPanelPage() {
   ]
 
   const TABS = [
-    { id:'today', label:'Bugün', icon:'📅' },
-    { id:'calendar', label:'Takvim', icon:'🗓' },
+    { id:'today',    label:'Bugün',    icon:'📅' },
+    { id:'calendar', label:'Takvim',   icon:'🗓' },
     { id:'performance', label:'Performans', icon:'📊' },
-    { id:'homework', label:'Ödevler', icon:'📚' },
-    { id:'goals', label:'Hedefler', icon:'🎯' },
-    { id:'swot', label:'SWOT', icon:'🔍' },
+    { id:'homework', label:'Ödevler',  icon:'📚' },
+    { id:'goals',    label:'Hedefler', icon:'🎯' },
+    { id:'coach',    label:'AI Coach', icon:'🤖' },  // ← YENİ
+    { id:'swot',     label:'SWOT',     icon:'🔍' },
   ]
 
   if (loading) return (
@@ -842,6 +878,110 @@ export default function StudentPanelPage() {
             })}
           </div>
         )}
+
+        {/* ── AI COACH ── */}
+{activeTab === 'coach' && (
+  <div>
+    <div style={{ fontSize:'16px', fontWeight:700, color:'#1B3A6B', marginBottom:'14px' }}>
+      🤖 AI Akademik Koç
+    </div>
+
+    {/* Sohbet alanı */}
+    <div style={{ background:'#fff', borderRadius:'16px', overflow:'hidden', boxShadow:'0 2px 12px rgba(0,0,0,0.06)', marginBottom:'12px' }}>
+      <div style={{ padding:'12px 16px', borderBottom:'1px solid #F0F4F9', background:'linear-gradient(135deg, #1B3A6B 0%, #2563EB 100%)', display:'flex', alignItems:'center', gap:'10px' }}>
+        <div style={{ width:'36px', height:'36px', borderRadius:'50%', background:'rgba(255,255,255,0.2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'18px' }}>🤖</div>
+        <div>
+          <div style={{ fontSize:'13px', fontWeight:700, color:'#fff' }}>AI Koçun</div>
+          <div style={{ fontSize:'10px', color:'rgba(255,255,255,0.7)' }}>Kişiselleştirilmiş akademik destek</div>
+        </div>
+        {coachLoading && (
+          <div style={{ marginLeft:'auto', fontSize:'11px', color:'rgba(255,255,255,0.7)' }}>yazıyor...</div>
+        )}
+      </div>
+
+      {/* Mesajlar */}
+      <div style={{ padding:'16px', display:'flex', flexDirection:'column', gap:'12px', minHeight:'300px', maxHeight:'400px', overflowY:'auto' }}>
+        {coachMessages.map((msg, i) => (
+          <div key={i} style={{ display:'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+            {msg.role === 'ai' && (
+              <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:'#EEF3FB', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', flexShrink:0, marginRight:'8px', alignSelf:'flex-end' }}>🤖</div>
+            )}
+            <div style={{
+              maxWidth:'80%', padding:'10px 14px', borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+              background: msg.role === 'user' ? '#1B3A6B' : '#F8FAFC',
+              color: msg.role === 'user' ? '#fff' : '#1E293B',
+              fontSize:'13px', lineHeight:1.6, border: msg.role === 'ai' ? '1px solid #E2E8F0' : 'none',
+              whiteSpace:'pre-wrap',
+            }}>
+              {msg.text}
+            </div>
+            {msg.role === 'user' && (
+              <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:'#1B3A6B', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', fontWeight:700, color:'#fff', flexShrink:0, marginLeft:'8px', alignSelf:'flex-end' }}>
+                {profile?.full_name?.charAt(0)}
+              </div>
+            )}
+          </div>
+        ))}
+        {coachLoading && (
+          <div style={{ display:'flex', justifyContent:'flex-start' }}>
+            <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:'#EEF3FB', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', flexShrink:0, marginRight:'8px' }}>🤖</div>
+            <div style={{ padding:'10px 16px', borderRadius:'16px 16px 16px 4px', background:'#F8FAFC', border:'1px solid #E2E8F0' }}>
+              <div style={{ display:'flex', gap:'4px' }}>
+                {[0,1,2].map(i => (
+                  <div key={i} style={{ width:'6px', height:'6px', borderRadius:'50%', background:'#94A3B8', animation:`bounce 1s ease-in-out ${i*0.2}s infinite` }} />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Input */}
+      <div style={{ padding:'12px 16px', borderTop:'1px solid #F0F4F9', display:'flex', gap:'8px' }}>
+        <input
+          value={coachInput}
+          onChange={e => setCoachInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendCoachMessage()}
+          placeholder="Koçuna bir şey sor... (Enter ile gönder)"
+          style={{ flex:1, padding:'10px 14px', borderRadius:'20px', border:'1px solid #E2E8F0', fontSize:'13px', outline:'none', background:'#F8FAFC', color:'#1E293B', fontFamily:'inherit' }}
+        />
+        <button
+          onClick={sendCoachMessage}
+          disabled={coachLoading || !coachInput.trim()}
+          style={{ width:'40px', height:'40px', borderRadius:'50%', background: coachInput.trim() ? '#1B3A6B' : '#E2E8F0', border:'none', cursor: coachInput.trim() ? 'pointer' : 'default', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'background 0.2s' }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+            <line x1="22" y1="2" x2="11" y2="13"/>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    {/* Hızlı sorular */}
+    <div style={{ fontSize:'12px', color:'#94A3B8', marginBottom:'8px', fontWeight:600 }}>Hızlı sorular:</div>
+    <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
+      {[
+        'Hangi konuya önce çalışmalıyım?',
+        'Bu hafta için çalışma planı öner',
+        'Motivasyonum düştü, ne yapmalıyım?',
+        'Zayıf konularımı nasıl güçlendirebilirim?',
+      ].map(q => (
+        <button key={q} onClick={() => { setCoachInput(q); }}
+          style={{ padding:'10px 14px', borderRadius:'10px', background:'#fff', border:'1px solid #E2E8F0', fontSize:'12px', color:'#1B3A6B', cursor:'pointer', textAlign:'left', fontWeight:500 }}>
+          💬 {q}
+        </button>
+      ))}
+    </div>
+
+    <style>{`
+      @keyframes bounce {
+        0%, 100% { transform: translateY(0); opacity: 0.4; }
+        50% { transform: translateY(-4px); opacity: 1; }
+      }
+    `}</style>
+  </div>
+)}
 
         {/* ── SWOT ── */}
         {activeTab === 'swot' && (
