@@ -1,0 +1,81 @@
+/* Admin Global Responsive CSS */
+
+/* ── Genel ── */
+.admin-page {
+    padding: 20px 16px;
+    max-width: 1300px;
+  }
+  .admin-page h1 {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1B3A6B;
+    margin: 0;
+  }
+  
+  /* ── Grid sistemleri ── */
+  .grid-2 { display: grid; gap: 12px; grid-template-columns: 1fr; }
+  .grid-3 { display: grid; gap: 12px; grid-template-columns: 1fr; }
+  .grid-4 { display: grid; gap: 10px; grid-template-columns: repeat(2,1fr); }
+  .grid-books { display: grid; gap: 12px; grid-template-columns: 1fr; }
+  
+  /* ── Sidebar layout (sol liste + sağ içerik) ── */
+  .sidebar-layout {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: 1fr;
+  }
+  .sidebar-list { display: none; }
+  .sidebar-dropdown { display: block; margin-bottom: 12px; }
+  .sidebar-dropdown select {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #E2E8F0;
+    font-size: 13px;
+    color: #1B3A6B;
+    background: #fff;
+    outline: none;
+    font-family: inherit;
+  }
+  
+  /* ── Metrik kartlar ── */
+  .metrics-row {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(2,1fr);
+    margin-bottom: 16px;
+  }
+  
+  /* ── İki kolon layout ── */
+  .two-col {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: 1fr;
+  }
+  
+  /* ── Tablo/liste overflow ── */
+  .scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  
+  /* ── Butonlar ── */
+  .header-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  
+  /* ── MASAÜSTÜ (768px ve üzeri) ── */
+  @media (min-width: 768px) {
+    .admin-page { padding: 28px; }
+  
+    .grid-2 { grid-template-columns: repeat(2,1fr); }
+    .grid-3 { grid-template-columns: repeat(3,1fr); }
+    .grid-4 { grid-template-columns: repeat(4,1fr); }
+    .grid-books { grid-template-columns: repeat(3,1fr); }
+  
+    .sidebar-layout { grid-template-columns: 240px 1fr; }
+    .sidebar-list { display: block; }
+    .sidebar-dropdown { display: none !important; }
+  
+    .metrics-row { grid-template-columns: repeat(4,1fr); }
+    .two-col { grid-template-columns: 1fr 1fr; }
+  }

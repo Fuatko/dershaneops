@@ -188,7 +188,7 @@ export default function LoginPage() {
                 </div>
               )}
 
-              <button onClick={verifyOtp} disabled={loading} style={{ width: '100%', padding: '12px', borderRadius: '9px', background: otp.length === 4 ? '#1B3A6B' : '#D5DFF0', color: '#fff', fontSize: '14px', fontWeight: 700, border: 'none', cursor: otp.length === 6 ? 'pointer' : 'default', marginBottom: '12px' }}>
+              <button onClick={verifyOtp} disabled={loading} style={{ width: '100%', padding: '12px', borderRadius: '9px', background: '#1B3A6B', color: '#fff', fontSize: '14px', fontWeight: 700, border: 'none', cursor: otp.length === 6 ? 'pointer' : 'default', marginBottom: '12px' }}>
                 {loading ? 'Doğrulanıyor...' : 'Giriş Yap'}
               </button>
 
