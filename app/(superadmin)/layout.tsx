@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
 
-const navItems = [
+const NAV_ITEMS = [
   { href: '/superadmin',         label: 'Genel Bakış' },
   { href: '/superadmin/tenants', label: 'Kurumlar' },
   { href: '/superadmin/users',   label: 'Tüm Kullanıcılar' },
@@ -14,34 +14,33 @@ const navItems = [
   { href: '/superadmin/modules', label: 'Modül Yönetimi' },
 ]
 
+const SIDEBAR_BG = '#1B1464'
+const DIVIDER    = '1px solid rgba(255,255,255,0.1)'
+
 export default function SuperAdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const [drawerOpen, setDrawerOpen] = useState(false)
-  const [isMobile, setIsMobile] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [mobile, setMobile] = useState(false)
 
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768)
+    const check = () => setMobile(window.innerWidth < 768)
     check()
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
   }, [])
 
-  useEffect(() => { setDrawerOpen(false) }, [pathname])
+  useEffect(() => { setOpen(false) }, [pathname])
 
   useEffect(() => {
-    if (drawerOpen) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
-    }
+    document.body.style.overflow = open ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
-  }, [drawerOpen])
+  }, [open])
 
-  const activeLabel = navItems.find(n =>
+  const activeLabel = NAV_ITEMS.find(n =>
     pathname === n.href || pathname.startsWith(n.href + '/')
   )?.label ?? 'Süper Admin'
 
-  const SidebarLogo = () => (
+  const logoBlock = (
     <div style={{ display:'flex', alignItems:'center', gap:'9px' }}>
       <div style={{ width:'30px', height:'30px', borderRadius:'7px', background:'rgba(255,255,255,0.15)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -58,25 +57,25 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     </div>
   )
 
-  const NavLinks = ({ onClose }: { onClose?: () => void }) => (
+  const navLinks = (
     <nav style={{ flex:1, padding:'10px 8px', overflowY:'auto' }}>
-      {navItems.map(item => {
-        const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+      {NAV_ITEMS.map(item => {
+        const active = pathname === item.href || pathname.startsWith(item.href + '/')
         return (
           <Link
             key={item.href}
             href={item.href}
-            onClick={onClose}
+            onClick={() => setOpen(false)}
             style={{
               display: 'block',
               padding: '10px 14px',
               borderRadius: '8px',
               marginBottom: '3px',
               fontSize: '13px',
-              fontWeight: isActive ? 600 : 400,
-              color: isActive ? '#fff' : 'rgba(255,255,255,0.65)',
-              background: isActive ? 'rgba(255,255,255,0.15)' : 'transparent',
-              borderLeft: isActive ? '3px solid #C4B5FD' : '3px solid transparent',
+              fontWeight: active ? 600 : 400,
+              color: active ? '#fff' : 'rgba(255,255,255,0.65)',
+              background: active ? 'rgba(255,255,255,0.15)' : 'transparent',
+              borderLeft: active ? '3px solid #C4B5FD' : '3px solid transparent',
               textDecoration: 'none',
             }}
           >
@@ -87,11 +86,11 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     </nav>
   )
 
-  const AdminButton = () => (
-    <div style={{ padding:'10px 8px', borderTop:'1px solid rgba(255,255,255,0.1)', flexShrink:0 }}>
+  const adminBtn = (
+    <div style={{ padding:'10px 8px', borderTop:DIVIDER, flexShrink:0 }}>
       
         href="/dashboard"
-        style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:'9px 12px', borderRadius:'8px', fontSize:'12px', fontWeight:600, color:'#1B1464', background:'#fff', textDecoration:'none' }}
+        style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:'9px 12px', borderRadius:'8px', fontSize:'12px', fontWeight:600, color:SIDEBAR_BG, background:'#fff', textDecoration:'none' }}
       >
         ← Admin Paneli
       </a>
@@ -101,50 +100,43 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
   return (
     <div style={{ display:'flex', height:'100vh', background:'#F8FAFC', overflow:'hidden' }}>
 
-      {/* ── DESKTOP SIDEBAR (768px ve üzeri) ── */}
-      {!isMobile && (
-        <aside style={{ width:'220px', background:'#1B1464', flexShrink:0, display:'flex', flexDirection:'column', height:'100vh' }}>
-          <div style={{ padding:'16px 14px', borderBottom:'1px solid rgba(255,255,255,0.1)', flexShrink:0 }}>
-            <SidebarLogo />
+      {/* Desktop sidebar */}
+      {!mobile && (
+        <aside style={{ width:'220px', background:SIDEBAR_BG, flexShrink:0, display:'flex', flexDirection:'column', height:'100vh' }}>
+          <div style={{ padding:'16px 14px', borderBottom:DIVIDER, flexShrink:0 }}>
+            {logoBlock}
           </div>
-          <NavLinks />
-          <AdminButton />
+          {navLinks}
+          {adminBtn}
         </aside>
       )}
 
-      {/* ── MOBİL: Overlay + Drawer ── */}
-      {isMobile && drawerOpen && (
+      {/* Mobil overlay */}
+      {mobile && open && (
         <div
-          onClick={() => setDrawerOpen(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.55)',
-            zIndex: 200,
-          }}
+          onClick={() => setOpen(false)}
+          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:200 }}
         />
       )}
 
-      {isMobile && (
+      {/* Mobil drawer */}
+      {mobile && (
         <aside style={{
           position: 'fixed',
-          top: 0,
-          left: 0,
-          bottom: 0,
+          top: 0, left: 0, bottom: 0,
           width: '240px',
-          background: '#1B1464',
+          background: SIDEBAR_BG,
           zIndex: 300,
-          transform: drawerOpen ? 'translateX(0)' : 'translateX(-100%)',
+          transform: open ? 'translateX(0)' : 'translateX(-100%)',
           transition: 'transform 0.25s ease',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: drawerOpen ? '6px 0 24px rgba(0,0,0,0.35)' : 'none',
+          boxShadow: open ? '6px 0 24px rgba(0,0,0,0.35)' : 'none',
         }}>
-          {/* Drawer header: logo + kapat */}
-          <div style={{ padding:'14px', borderBottom:'1px solid rgba(255,255,255,0.1)', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
-            <SidebarLogo />
+          <div style={{ padding:'13px 14px', borderBottom:DIVIDER, display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+            {logoBlock}
             <button
-              onClick={() => setDrawerOpen(false)}
+              onClick={() => setOpen(false)}
               style={{ width:'30px', height:'30px', borderRadius:'6px', background:'rgba(255,255,255,0.1)', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
@@ -153,28 +145,20 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
               </svg>
             </button>
           </div>
-          <NavLinks onClose={() => setDrawerOpen(false)} />
-          <AdminButton />
+          {navLinks}
+          {adminBtn}
         </aside>
       )}
 
-      {/* ── MAIN CONTENT ── */}
+      {/* Ana içerik */}
       <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0, overflow:'hidden' }}>
 
         {/* Mobil header */}
-        {isMobile && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0 14px',
-            height: '52px',
-            background: '#1B1464',
-            flexShrink: 0,
-          }}>
+        {mobile && (
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 14px', height:'52px', background:SIDEBAR_BG, flexShrink:0 }}>
             <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
               <button
-                onClick={() => setDrawerOpen(true)}
+                onClick={() => setOpen(true)}
                 style={{ width:'34px', height:'34px', borderRadius:'7px', background:'rgba(255,255,255,0.12)', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
@@ -197,10 +181,11 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
           </div>
         )}
 
-        {/* Sayfa içeriği */}
+        {/* Sayfa içeriği — tam genişlik, kayma yok */}
         <main style={{ flex:1, overflowY:'auto', overflowX:'hidden' }}>
           {children}
         </main>
+
       </div>
     </div>
   )
