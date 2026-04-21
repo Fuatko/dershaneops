@@ -1,8 +1,10 @@
+import AccessibilityWidget from '@/components/AccessibilityWidget'
 'use client'
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+
 
 function localDate(d: Date = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
@@ -839,6 +841,10 @@ export default function StudentPanelPage() {
                 </a>
               )
             })}
+            <AccessibilityWidget />
+    </div>
+  )
+}
           </div>
         )}
 
