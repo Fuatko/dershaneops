@@ -1,15 +1,14 @@
-python3 << 'PYEOF'
-content = """'use client'
+'use client'
 export const dynamic = 'force-dynamic'
 
 import React, { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 const BRANCHES = [
-  'Matematik', 'Fizik', 'Kimya', 'Biyoloji', 'Turkce', 'Edebiyat',
-  'Tarih', 'Cografya', 'Felsefe', 'Din Kulturu', 'Ingilizce', 'Almanca',
-  'Fransizca', 'Beden Egitimi', 'Muzik', 'Gorsel Sanatlar', 'Bilisim',
-  'Matematik-Fen', 'Sosyal Bilgiler', 'Diger'
+  'Matematik','Fizik','Kimya','Biyoloji','Turkce','Edebiyat',
+  'Tarih','Cografya','Felsefe','Din Kulturu','Ingilizce','Almanca',
+  'Fransizca','Beden Egitimi','Muzik','Gorsel Sanatlar','Bilisim',
+  'Matematik-Fen','Sosyal Bilgiler','Diger'
 ]
 
 export default function NewTeacherPage() {
@@ -90,7 +89,7 @@ export default function NewTeacherPage() {
         </div>
 
         <div style={{ height:'1px', background:'#F0F4F9', margin:'18px 0' }} />
-        <div style={{ fontSize:'12px', fontWeight:700, color:'#94A3B8', textTransform:'uppercase' as const, letterSpacing:'0.5px', marginBottom:'14px' }}>
+        <div style={{ fontSize:'12px', fontWeight:700, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'14px' }}>
           Mesleki Bilgiler
         </div>
 
@@ -104,7 +103,7 @@ export default function NewTeacherPage() {
 
         {form.subject === 'Diger' && (
           <div style={{ marginBottom:'14px' }}>
-            <label style={lbl}>Brans Adi (Manuel)</label>
+            <label style={lbl}>Brans Adi</label>
             <input value={form.subject_custom} onChange={e => setForm(p => ({ ...p, subject_custom:e.target.value }))} placeholder="Brans adinizi yazin..." style={inp} />
           </div>
         )}
@@ -112,10 +111,9 @@ export default function NewTeacherPage() {
         {classrooms.length > 0 && (
           <div style={{ marginBottom:'20px' }}>
             <label style={lbl}>Sorumlu Oldugu Siniflar</label>
-            <div style={{ display:'flex', flexWrap:'wrap' as const, gap:'6px', marginTop:'6px' }}>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:'6px', marginTop:'6px' }}>
               {classrooms.map(c => (
-                <button key={c.id} type="button"
-                  onClick={() => toggleClassroom(c.id)}
+                <button key={c.id} type="button" onClick={() => toggleClassroom(c.id)}
                   style={{ padding:'5px 12px', borderRadius:'20px', border:'1.5px solid', borderColor:form.classroom_ids.includes(c.id)?'#1B3A6B':'#E2E8F0', background:form.classroom_ids.includes(c.id)?'#1B3A6B':'#fff', color:form.classroom_ids.includes(c.id)?'#fff':'#475569', fontSize:'11.5px', fontWeight:600, cursor:'pointer' }}>
                   {c.name}
                 </button>
@@ -152,8 +150,3 @@ export default function NewTeacherPage() {
     </div>
   )
 }
-"""
-with open('app/(admin)/teachers/new/page.tsx', 'w') as f:
-    f.write(content)
-print("Done")
-PYEOF
