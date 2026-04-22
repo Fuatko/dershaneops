@@ -17,50 +17,61 @@ export default function LoginPage() {
     if (!email) { setError('E-posta adresi gerekli.'); return }
     setLoading(true)
     setError('')
+  
+    // Önce profiles tablosunda bu mail var mı kontrol et
+    const supabaseCheck = createClient()
+    const { data: { user: existingUser } } = await supabaseCheck.auth.getUser()
+  
     const { error: err } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        shouldCreateUser: true,
-        emailRedirectTo: undefined,
+        shouldCreateUser: false, // Yeni kullanıcı oluşturma!
       }
     })
     if (err) {
-      setError('E-posta gönderilemedi: ' + err.message)
+      setError('Bu e-posta sistemde kayıtlı değil veya kod gönderilemedi.')
     } else {
       setStep('otp')
     }
     setLoading(false)
   }
+  
 
   async function verifyOtp() {
     if (!otp) { setError('Doğrulama kodu gerekli.'); return }
     setLoading(true)
     setError('')
-    const { error: err } = await supabase.auth.verifyOtp({
+    const { data, error: err } = await supabase.auth.verifyOtp({
       email,
       token: otp,
-      type: 'magiclink'
+      type: 'email'  // magiclink değil email!
     })
     if (err) {
-      setError('Geçersiz veya süresi dolmuş kod.')
+      setError('Geçersiz veya süresi dolmuş kod. Tekrar deneyin.')
     } else {
-      window.location.href = '/dashboard'
+      // Role göre yönlendir
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('user_id', data.user?.id)
+        .single()
+  
+      const role = profile?.role
+      if (role === 'admin' || role === 'superadmin') {
+        window.location.href = '/dashboard'
+      } else if (role === 'teacher') {
+        window.location.href = '/teacher-panel'
+      } else if (role === 'student') {
+        window.location.href = '/student-panel'
+      } else if (role === 'parent') {
+        window.location.href = '/parent-panel'
+      } else {
+        window.location.href = '/dashboard'
+      }
     }
     setLoading(false)
   }
-
-  async function signInWithPassword() {
-    if (!email || !password) { setError('E-posta ve şifre gerekli.'); return }
-    setLoading(true)
-    setError('')
-    const { error: err } = await supabase.auth.signInWithPassword({ email, password })
-    if (err) {
-      setError('Giriş başarısız: ' + err.message)
-    } else {
-      window.location.href = '/dashboard'
-    }
-    setLoading(false)
-  }
+  
 
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(160deg, #F0F4F9 0%, #EEF3FB 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
