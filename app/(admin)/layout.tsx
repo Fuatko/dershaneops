@@ -71,26 +71,25 @@ const navGroups = [
     { href: '/profile',         label: 'Gelişim Profili',    icon: 'user' },
   ]},
   { section: 'Raporlar', links: [
-    { href: '/exams',          label: 'Deneme Sınavları',    icon: 'exam' },
-    { href: '/exam-analytics', label: 'Sınav Analizi',       icon: 'analytics' },
-    { href: '/institution',    label: 'Kurum Zekası',        icon: 'building' },
-    { href: '/prediction',     label: 'Tahmin Motoru',       icon: 'cpu' },
-    { href: '/scenario',       label: 'Senaryo Motoru',      icon: 'layers' },
-    { href: '/coordinator',    label: 'Akademik Koordinatör',icon: 'compass' },
-    { href: '/guidance',       label: 'Rehberlik',           icon: 'message' },
-    { href: '/reports',        label: 'Raporlar ve Export',  icon: 'download' },
-    { href: '/notifications',  label: 'Bildirimler',         icon: 'bell' },
+    { href: '/exams',          label: 'Deneme Sınavları',     icon: 'exam' },
+    { href: '/exam-analytics', label: 'Sınav Analizi',        icon: 'analytics' },
+    { href: '/institution',    label: 'Kurum Zekası',         icon: 'building' },
+    { href: '/prediction',     label: 'Tahmin Motoru',        icon: 'cpu' },
+    { href: '/scenario',       label: 'Senaryo Motoru',       icon: 'layers' },
+    { href: '/coordinator',    label: 'Akademik Koordinatör', icon: 'compass' },
+    { href: '/guidance',       label: 'Rehberlik',            icon: 'message' },
+    { href: '/reports',        label: 'Raporlar ve Export',   icon: 'download' },
+    { href: '/notifications',  label: 'Bildirimler',          icon: 'bell' },
   ]},
   { section: 'Sistem', links: [
     { href: '/accessibility', label: 'Erişilebilirlik', icon: 'accessibility' },
-    { href: '/superadmin',    label: 'Süper Admin',     icon: 'settings' },
   ]},
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const pathname  = usePathname()
-  const supabase  = createClient()
-  const [menuOpen, setMenuOpen]     = useState(false)
+  const pathname = usePathname()
+  const supabase = createClient()
+  const [menuOpen, setMenuOpen]       = useState(false)
   const [currentUser, setCurrentUser] = useState<any>(null)
 
   useEffect(() => {
@@ -112,15 +111,35 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     window.location.href = '/login'
   }
 
-  const activeLabel  = navGroups.flatMap(g => g.links).find(l => l.href === pathname)?.label ?? 'Yönetim Paneli'
-  const tenantName   = (currentUser?.tenants as any)?.name ?? 'DershaneOPS'
-  const logoUrl      = (currentUser?.tenants as any)?.logo_url ?? null
-  const userInitials = currentUser?.full_name?.split(' ').map((n:string) => n[0]).join('').slice(0,2) ?? 'AD'
+  const isSuperAdmin  = currentUser?.role === 'superadmin'
+  const tenantName    = (currentUser?.tenants as any)?.name ?? 'DershaneOPS'
+  const logoUrl       = (currentUser?.tenants as any)?.logo_url ?? null
+  const userInitials  = currentUser?.full_name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2) ?? 'AD'
+  const activeLabel   = navGroups.flatMap(g => g.links).find(l => l.href === pathname)?.label
+    ?? (pathname === '/superadmin' ? 'Süper Admin' : 'Yönetim Paneli')
 
-  const renderSidebarContent = () => (
+  const NavLink = ({ href, label, icon }: { href: string; label: string; icon: string }) => {
+    const isActive = pathname === href
+    const IconComp = Icons[icon]
+    return (
+      <Link
+        href={href}
+        onClick={() => setMenuOpen(false)}
+        aria-current={isActive ? 'page' : undefined}
+        style={{ display:'flex', alignItems:'center', gap:'8px', padding:'8px 10px', borderRadius:'7px', marginBottom:'1px', fontSize:'12.5px', fontWeight:isActive?600:400, color:isActive?'#1B3A6B':'#475569', textDecoration:'none', background:isActive?'#EEF3FB':'transparent', borderLeft:isActive?'2px solid #1B3A6B':'2px solid transparent' }}
+      >
+        <span style={{ color:isActive?'#1B3A6B':'#94A3B8', display:'flex', flexShrink:0 }}>
+          {IconComp ? <IconComp /> : null}
+        </span>
+        {label}
+      </Link>
+    )
+  }
+
+  const SidebarContent = () => (
     <div style={{ display:'flex', flexDirection:'column', height:'100%' }}>
 
-      {/* Logo / Kurum Adı */}
+      {/* Logo / Kurum */}
       <div style={{ padding:'18px 16px', borderBottom:'1px solid #E8EEF5', display:'flex', alignItems:'center', gap:'10px', flexShrink:0 }}>
         {logoUrl ? (
           <img src={logoUrl} alt={tenantName} style={{ width:'34px', height:'34px', borderRadius:'8px', objectFit:'cover', flexShrink:0 }} />
@@ -142,31 +161,29 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Nav */}
       <nav style={{ flex:1, padding:'8px', overflowY:'auto' }} aria-label="Ana navigasyon">
+
+        {/* Normal menü grupları */}
         {navGroups.map(group => (
           <div key={group.section}>
             <div style={{ fontSize:'9.5px', fontWeight:700, letterSpacing:'1px', textTransform:'uppercase', color:'#94A3B8', padding:'12px 8px 4px' }}>
               {group.section}
             </div>
-            {group.links.map(link => {
-              const isActive   = pathname === link.href
-              const IconComp   = Icons[link.icon]
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setMenuOpen(false)}
-                  aria-current={isActive ? 'page' : undefined}
-                  style={{ display:'flex', alignItems:'center', gap:'8px', padding:'8px 10px', borderRadius:'7px', marginBottom:'1px', fontSize:'12.5px', fontWeight:isActive?600:400, color:isActive?'#1B3A6B':'#475569', textDecoration:'none', background:isActive?'#EEF3FB':'transparent', borderLeft:isActive?'2px solid #1B3A6B':'2px solid transparent' }}
-                >
-                  <span style={{ color:isActive?'#1B3A6B':'#94A3B8', display:'flex', flexShrink:0 }}>
-                    {IconComp ? <IconComp /> : null}
-                  </span>
-                  {link.label}
-                </Link>
-              )
-            })}
+            {group.links.map(link => (
+              <NavLink key={link.href} {...link} />
+            ))}
           </div>
         ))}
+
+        {/* Sadece Süper Admin görür */}
+        {isSuperAdmin && (
+          <div>
+            <div style={{ fontSize:'9.5px', fontWeight:700, letterSpacing:'1px', textTransform:'uppercase', color:'#94A3B8', padding:'12px 8px 4px' }}>
+              Yönetim
+            </div>
+            <NavLink href="/superadmin" label="Süper Admin" icon="settings" />
+          </div>
+        )}
+
       </nav>
 
       {/* Footer */}
@@ -180,7 +197,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               {currentUser?.full_name ?? 'Yükleniyor...'}
             </div>
             <div style={{ fontSize:'10px', color:'#94A3B8' }}>
-              {currentUser?.role === 'superadmin' ? 'Süper Admin' : 'Admin'}
+              {isSuperAdmin ? 'Süper Admin' : 'Admin'}
             </div>
           </div>
         </div>
@@ -201,7 +218,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Desktop Sidebar */}
       <aside className="desk-sidebar" style={{ width:'220px', background:'#fff', borderRight:'1px solid #E8EEF5', flexShrink:0, overflow:'hidden' }} aria-label="Yönetim menüsü">
-        {renderSidebarContent()}
+        <SidebarContent />
       </aside>
 
       {/* Mobil overlay */}
@@ -213,7 +230,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Mobil Drawer */}
       <aside className="mob-drawer" aria-label="Yönetim menüsü" aria-hidden={!menuOpen}
         style={{ position:'fixed', top:0, left:0, bottom:0, width:'260px', background:'#fff', zIndex:300, transform:menuOpen?'translateX(0)':'translateX(-100%)', transition:'transform 0.25s ease', boxShadow:'4px 0 24px rgba(0,0,0,0.15)' }}>
-        {renderSidebarContent()}
+        <SidebarContent />
       </aside>
 
       {/* Sağ taraf */}
