@@ -22,12 +22,12 @@ const GRADES = [
 
 const BRANCHES = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','R','S','T','U','V','Y','Z']
 
-const inp: React.CSSProperties = {
+const inp = {
   width:'100%', padding:'9px 12px', borderRadius:'8px',
   border:'1px solid #D5DFF0', fontSize:'13px', color:'#1B3A6B',
   outline:'none', background:'#fff', boxSizing:'border-box', fontFamily:'inherit'
 }
-const lbl: React.CSSProperties = {
+const lbl = {
   display:'block', fontSize:'11.5px', fontWeight:600, color:'#4A6080', marginBottom:'5px'
 }
 
