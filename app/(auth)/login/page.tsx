@@ -36,26 +36,36 @@ export default function LoginPage() {
     if (!otp) { setError('Doğrulama kodu gerekli.'); return }
     setLoading(true)
     setError('')
-    const { data, error: err } = await supabase.auth.verifyOtp({
+    
+    // Önce 'email' type dene
+    let result = await supabase.auth.verifyOtp({
       email,
       token: otp,
       type: 'email'
     })
-    if (err) {
-      setError('Geçersiz veya süresi dolmuş kod.')
+  
+    // Hata verdiyse 'magiclink' dene
+    if (result.error) {
+      result = await supabase.auth.verifyOtp({
+        email,
+        token: otp,
+        type: 'magiclink'
+      })
+    }
+  
+    if (result.error) {
+      setError('Geçersiz kod. Lütfen yeni kod isteyin.')
       setLoading(false)
       return
     }
   
-    // Profil var mı kontrol et
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
-      .eq('user_id', data.user?.id)
+      .eq('user_id', result.data.user?.id)
       .single()
   
     if (!profile) {
-      // Profil yok — yetkisiz kullanıcı, çıkış yaptır
       await supabase.auth.signOut()
       setError('Bu hesap sisteme kayıtlı değil. Yöneticinizle iletişime geçin.')
       setStep('email')
@@ -64,17 +74,12 @@ export default function LoginPage() {
     }
   
     const role = profile.role
-    if (role === 'admin' || role === 'superadmin') {
-      window.location.href = '/dashboard'
-    } else if (role === 'teacher') {
-      window.location.href = '/teacher-panel'
-    } else if (role === 'student') {
-      window.location.href = '/student-panel'
-    } else if (role === 'parent') {
-      window.location.href = '/parent-panel'
-    } else {
-      window.location.href = '/dashboard'
-    }
+    if (role === 'admin' || role === 'superadmin') window.location.href = '/dashboard'
+    else if (role === 'teacher') window.location.href = '/teacher-panel'
+    else if (role === 'student') window.location.href = '/student-panel'
+    else if (role === 'parent') window.location.href = '/parent-panel'
+    else window.location.href = '/dashboard'
+    
     setLoading(false)
   }
   
