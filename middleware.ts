@@ -82,11 +82,14 @@ export async function middleware(request: NextRequest) {
 
     // Admin sayfaları — sadece admin ve superadmin
     const adminPaths = [
-      '/dashboard', '/students', '/teachers', '/scheduler',
+      '/dashboard', '/students', '/teachers', '/parents', '/parent-match',
+      '/scheduler', '/conflicts', '/makeup',
       '/books', '/risk', '/coordinator', '/guidance', '/outcomes',
       '/reports', '/swot', '/exams', '/prediction', '/scenario',
       '/institution', '/parentreport', '/goals', '/daily-tasks',
       '/performance', '/exam-analytics', '/notifications',
+      '/questions', '/studyplan', '/teacherdecision', '/profile',
+      '/accessibility',
     ]
     const isAdminPath = adminPaths.some(p => pathname.startsWith(p))
     if (isAdminPath && !isAdminLike) {
