@@ -841,12 +841,8 @@ export default function StudentPanelPage() {
                 </a>
               )
             })}
-            <AccessibilityWidget />
-    </div>
-  )
-}
-          </div>
-        )}
+            </div>
+          )}
 
         {/* ── HEDEFLER ── */}
         {activeTab === 'goals' && (
