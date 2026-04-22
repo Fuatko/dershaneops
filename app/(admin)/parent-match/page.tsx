@@ -20,7 +20,7 @@ export default function ParentMatchPage() {
     const [{ data: p }, { data: s }, { data: m }] = await Promise.all([
       supabase.from('profiles').select('id, full_name').eq('role', 'parent').order('full_name'),
       supabase.from('profiles').select('id, full_name').eq('role', 'student').order('full_name'),
-      supabase.from('parent_students').select('*, parent:profiles!parent_students_parent_id_fkey(full_name), student:profiles!parent_students_student_id_fkey(full_name)'),
+      supabase.from('parent_student_matches').select('*, parent:profiles!parent_student_matches_parent_id_fkey(full_name), student:profiles!parent_student_matches_student_id_fkey(full_name)'),
     ])
     setParents(p ?? [])
     setStudents(s ?? [])
@@ -33,7 +33,7 @@ export default function ParentMatchPage() {
     const exists = matches.find(m => m.parent_id === selectedParent && m.student_id === selectedStudent)
     if (exists) { alert('Bu eşleştirme zaten mevcut!'); return }
     setSaving(true)
-    await supabase.from('parent_students').insert({ parent_id: selectedParent, student_id: selectedStudent })
+    await supabase.from('parent_student_matches').insert({ parent_id: selectedParent, student_id: selectedStudent })
     setSelectedParent('')
     setSelectedStudent('')
     await load()
@@ -41,8 +41,8 @@ export default function ParentMatchPage() {
   }
 
   async function removeMatch(id: string) {
-    if (!confirm('Bu eşleştirmeyi silmek istediğinizden emin misiniz?')) return
-    await supabase.from('parent_students').delete().eq('id', id)
+    if (!confirm('Bu eşleştirmeyi silmek istiyor musunuz?')) return
+    await supabase.from('parent_student_matches').delete().eq('id', id)
     await load()
   }
 

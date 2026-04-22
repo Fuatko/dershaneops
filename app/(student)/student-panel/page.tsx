@@ -1017,7 +1017,8 @@ export default function StudentPanelPage() {
           </div>
         )}
 
-      </div>
+</div>
+      <AccessibilityWidget />
     </div>
   )
 }
