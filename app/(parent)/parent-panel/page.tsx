@@ -33,8 +33,8 @@ export default function ParentPanelPage() {
 
     // Velinin çocuklarını bul
     const { data: matches } = await supabase
-      .from('parent_student_matches')
-      .select('student_id, profiles!parent_student_matches_student_id_fkey(id, full_name, grade_level, classroom_id)')
+      .from('parent_students')
+      .select('student_id, profiles!parent_students_student_id_fkey(id, full_name, grade_level, classroom_id)')
       .eq('parent_id', p.id)
 
     const kids = (matches ?? []).map((m: any) => m.profiles).filter(Boolean)
