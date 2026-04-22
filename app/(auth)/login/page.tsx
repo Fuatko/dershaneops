@@ -17,19 +17,14 @@ export default function LoginPage() {
     if (!email) { setError('E-posta adresi gerekli.'); return }
     setLoading(true)
     setError('')
-  
-    // Önce profiles tablosunda bu mail var mı kontrol et
-    const supabaseCheck = createClient()
-    const { data: { user: existingUser } } = await supabaseCheck.auth.getUser()
-  
     const { error: err } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        shouldCreateUser: false, // Yeni kullanıcı oluşturma!
+        shouldCreateUser: true,
       }
     })
     if (err) {
-      setError('Bu e-posta sistemde kayıtlı değil veya kod gönderilemedi.')
+      setError('Kod gönderilemedi: ' + err.message)
     } else {
       setStep('otp')
     }
@@ -44,30 +39,41 @@ export default function LoginPage() {
     const { data, error: err } = await supabase.auth.verifyOtp({
       email,
       token: otp,
-      type: 'email'  // magiclink değil email!
+      type: 'email'
     })
     if (err) {
-      setError('Geçersiz veya süresi dolmuş kod. Tekrar deneyin.')
-    } else {
-      // Role göre yönlendir
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('user_id', data.user?.id)
-        .single()
+      setError('Geçersiz veya süresi dolmuş kod.')
+      setLoading(false)
+      return
+    }
   
-      const role = profile?.role
-      if (role === 'admin' || role === 'superadmin') {
-        window.location.href = '/dashboard'
-      } else if (role === 'teacher') {
-        window.location.href = '/teacher-panel'
-      } else if (role === 'student') {
-        window.location.href = '/student-panel'
-      } else if (role === 'parent') {
-        window.location.href = '/parent-panel'
-      } else {
-        window.location.href = '/dashboard'
-      }
+    // Profil var mı kontrol et
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('user_id', data.user?.id)
+      .single()
+  
+    if (!profile) {
+      // Profil yok — yetkisiz kullanıcı, çıkış yaptır
+      await supabase.auth.signOut()
+      setError('Bu hesap sisteme kayıtlı değil. Yöneticinizle iletişime geçin.')
+      setStep('email')
+      setLoading(false)
+      return
+    }
+  
+    const role = profile.role
+    if (role === 'admin' || role === 'superadmin') {
+      window.location.href = '/dashboard'
+    } else if (role === 'teacher') {
+      window.location.href = '/teacher-panel'
+    } else if (role === 'student') {
+      window.location.href = '/student-panel'
+    } else if (role === 'parent') {
+      window.location.href = '/parent-panel'
+    } else {
+      window.location.href = '/dashboard'
     }
     setLoading(false)
   }
