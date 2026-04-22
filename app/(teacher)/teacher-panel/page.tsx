@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import AccessibilityWidget from '@/components/AccessibilityWidget'
 
 function localDate(d: Date = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
@@ -922,6 +923,7 @@ const [hwFilterStatus, setHwFilterStatus] = useState('all')
 )}
 
       </div>
+      <AccessibilityWidget />
     </div>
   )
 }
