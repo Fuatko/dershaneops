@@ -1159,7 +1159,7 @@ export default function StudentPanelPage() {
           </div>
         )}
 
-        {/* ── SWOT ── */
+        {/* ── SWOT ── */}
         {activeTab === 'swot' && (
           <div>
             <div style={{ fontSize:'16px', fontWeight:700, color:'#1B3A6B', marginBottom:'14px' }}>🔍 SWOT Analizim</div>
