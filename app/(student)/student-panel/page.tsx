@@ -350,7 +350,7 @@ export default function StudentPanelPage() {
       try {
         const res = await fetch('/api/ai', {
           method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ type:'coach', student_name: profile?.full_name?.split(' ')[0], overall_rate: overallRate, streak: streak?.current_streak??0, weak_topics:'', strong_topics:'', pending_homework:0, daily_score: dailyScore, user_message: '"' + wheelQuestion.question + '" sorusunun dogru cevabi "' + wheelQuestion.correct_answer + '" secenegidir. Bu soruyu kisa ve anlasılır sekilde aciklar misin? (2-3 cumle)' })
+          body: JSON.stringify({ type:'coach', student_name: profile?.full_name?.split(' ')[0], overall_rate: 0, streak: streak?.current_streak??0, weak_topics:'', strong_topics:'', pending_homework:0, daily_score: 0, user_message: '"' + wheelQuestion.question + '" sorusunun dogru cevabi "' + wheelQuestion.correct_answer + '" secenegidir. Bu soruyu kisa ve anlasılır sekilde aciklar misin? (2-3 cumle)' })
         })
         const d = await res.json()
         setWheelExplain(d.response ?? '')
