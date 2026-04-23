@@ -163,6 +163,17 @@ export default function StudentPanelPage() {
   ])
   const [coachInput, setCoachInput] = useState('')
   const [coachLoading, setCoachLoading] = useState(false)
+  const [wheelQuestion, setWheelQuestion]  = useState<any>(null)
+  const [wheelSelected, setWheelSelected] = useState('')
+  const [wheelResult, setWheelResult]     = useState<'correct'|'wrong'|null>(null)
+  const [wheelExplain, setWheelExplain]   = useState('')
+  const [wheelLoading, setWheelLoading]   = useState(false)
+  const [wheelSpin, setWheelSpin]         = useState(false)
+  const [wheelScore, setWheelScore]       = useState(0)
+  const [wheelStreak, setWheelStreak]     = useState(0)
+  const [wheelTotal, setWheelTotal]       = useState(0)
+  const [wheelCorrect, setWheelCorrect]   = useState(0)
+  const wheelGoal = 10
 
   useEffect(() => { load() }, [])
 
@@ -310,6 +321,47 @@ export default function StudentPanelPage() {
     await load()
   }
 
+  async function spinWheel() {
+    setWheelSpin(true); setWheelQuestion(null); setWheelSelected(''); setWheelResult(null); setWheelExplain('')
+    await new Promise(r => setTimeout(r, 1000))
+    const { data: questions } = await supabase.from('verification_questions').select('*, subjects(name), topics(name)').limit(60)
+    if (!questions || questions.length === 0) { setWheelSpin(false); return }
+    setWheelQuestion(questions[Math.floor(Math.random() * questions.length)])
+    setWheelSpin(false)
+  }
+
+  async function answerWheel(option: string) {
+    if (!wheelQuestion || wheelResult) return
+    setWheelSelected(option)
+    const isCorrect = option === wheelQuestion.correct_answer
+    setWheelResult(isCorrect ? 'correct' : 'wrong')
+    setWheelTotal(p => p + 1)
+    if (isCorrect) {
+      setWheelCorrect(p => p + 1)
+      setWheelScore(p => p + 10)
+      setWheelStreak(p => p + 1)
+      const newStreak = wheelStreak + 1
+      if (newStreak > 0 && newStreak % 5 === 0) {
+        setCelebrationMsg(newStreak + ' dogru ust uste! Harika!'); setCelebration(true); setTimeout(() => setCelebration(false), 2500)
+      }
+    } else {
+      setWheelStreak(0)
+      setWheelLoading(true)
+      try {
+        const res = await fetch('/api/ai', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ type:'coach', student_name: profile?.full_name?.split(' ')[0], overall_rate: overallRate, streak: streak?.current_streak??0, weak_topics:'', strong_topics:'', pending_homework:0, daily_score: dailyScore, user_message: '"' + wheelQuestion.question + '" sorusunun dogru cevabi "' + wheelQuestion.correct_answer + '" secenegidir. Bu soruyu kisa ve anlasılır sekilde aciklar misin? (2-3 cumle)' })
+        })
+        const d = await res.json()
+        setWheelExplain(d.response ?? '')
+      } catch { setWheelExplain('') }
+      setWheelLoading(false)
+    }
+    if (wheelCorrect + (isCorrect ? 1 : 0) >= wheelGoal) {
+      setTimeout(() => { setCelebrationMsg('Gunluk hedefe ulastın! ' + wheelGoal + ' dogru!'); setCelebration(true); setTimeout(() => setCelebration(false), 4000) }, 1500)
+    }
+  }
+
   async function signOut() { await supabase.auth.signOut(); window.location.href = '/login' }
 
   function getCalForDate(d: string) { return calendar.filter(c => c.calendar_date === d) }
@@ -363,6 +415,7 @@ export default function StudentPanelPage() {
     { id:'homework', label:'Ödevler',  icon:'📚' },
     { id:'goals',    label:'Hedefler', icon:'🎯' },
     { id:'coach',    label:'AI Coach', icon:'🤖' },  // ← YENİ
+    { id:'wheel',   label:'Soru Carki', icon:'🎡' },
     { id:'swot',     label:'SWOT',     icon:'🔍' },
   ]
 
@@ -986,7 +1039,127 @@ export default function StudentPanelPage() {
   </div>
 )}
 
-        {/* ── SWOT ── */}
+
+        {/* SORU CARKI */}
+        {activeTab === 'wheel' && (
+          <div>
+            <div style={{ fontSize:'16px', fontWeight:700, color:'#1B3A6B', marginBottom:'6px' }}>Soru Carki</div>
+            <div style={{ fontSize:'12px', color:'#94A3B8', marginBottom:'14px' }}>Sorulari cevapla, kendini gelistir!</div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'8px', marginBottom:'14px' }}>
+              {[
+                { label:'Puan', value:wheelScore, icon:'💎', color:'#6B4FC8', bg:'#F0ECFB' },
+                { label:'Seri', value:wheelStreak, icon:'🔥', color:'#B45309', bg:'#FDF4E7' },
+                { label:'Hedef '+wheelGoal, value:wheelCorrect+'/'+wheelGoal, icon:'🎯', color:'#2E7D52', bg:'#EAF4EE' },
+              ].map(m => (
+                <div key={m.label} style={{ background:m.bg, borderRadius:'12px', padding:'12px', textAlign:'center' }}>
+                  <div style={{ fontSize:'20px', marginBottom:'4px' }}>{m.icon}</div>
+                  <div style={{ fontSize:'18px', fontWeight:800, color:m.color }}>{m.value}</div>
+                  <div style={{ fontSize:'10px', color:m.color, opacity:0.7 }}>{m.label}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ background:'#fff', borderRadius:'12px', padding:'10px 14px', marginBottom:'14px', border:'1px solid #E2E8F0' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', fontSize:'11px', color:'#94A3B8', marginBottom:'6px' }}>
+                <span>Gunluk Hedef</span>
+                <span style={{ fontWeight:700, color:'#2E7D52' }}>{Math.min(wheelCorrect,wheelGoal)}/{wheelGoal}</span>
+              </div>
+              <div style={{ height:'8px', background:'#F1F5F9', borderRadius:'4px', overflow:'hidden' }}>
+                <div style={{ height:'100%', width:Math.min(wheelCorrect/wheelGoal*100,100)+'%', background:'#10B981', borderRadius:'4px', transition:'width 0.5s' }} />
+              </div>
+              {wheelTotal > 0 && <div style={{ fontSize:'11px', color:'#94A3B8', marginTop:'5px' }}>{wheelTotal} soru cozuldu · %{Math.round(wheelCorrect/wheelTotal*100)} basari</div>}
+            </div>
+
+            {!wheelQuestion && !wheelSpin && (
+              <div style={{ background:'#fff', borderRadius:'16px', padding:'32px 20px', textAlign:'center', border:'1px solid #E2E8F0', marginBottom:'14px' }}>
+                <div style={{ fontSize:'56px', marginBottom:'14px' }}>🎡</div>
+                <div style={{ fontSize:'15px', fontWeight:700, color:'#1B3A6B', marginBottom:'8px' }}>Hazir misin?</div>
+                <div style={{ fontSize:'13px', color:'#94A3B8', marginBottom:'20px' }}>Tum konulardan rastgele sorular gelecek</div>
+                <button onClick={spinWheel} style={{ padding:'14px 32px', borderRadius:'20px', background:'#1B3A6B', color:'#fff', fontSize:'15px', fontWeight:700, border:'none', cursor:'pointer' }}>
+                  Carki Cevir!
+                </button>
+              </div>
+            )}
+
+            {wheelSpin && (
+              <div style={{ background:'#fff', borderRadius:'16px', padding:'48px 20px', textAlign:'center', border:'1px solid #E2E8F0', marginBottom:'14px' }}>
+                <div style={{ fontSize:'56px', marginBottom:'14px' }}>🎡</div>
+                <div style={{ fontSize:'14px', fontWeight:600, color:'#1B3A6B' }}>Soru seciliyor...</div>
+              </div>
+            )}
+
+            {wheelQuestion && !wheelSpin && (
+              <div style={{ background:'#fff', borderRadius:'16px', border:'1px solid #E2E8F0', overflow:'hidden', marginBottom:'14px' }}>
+                <div style={{ padding:'10px 16px', background:'#1B3A6B', display:'flex', alignItems:'center', gap:'8px' }}>
+                  <div>
+                    <div style={{ fontSize:'11px', color:'rgba(255,255,255,0.7)' }}>{wheelQuestion.subjects?.name}</div>
+                    <div style={{ fontSize:'12px', fontWeight:700, color:'#fff' }}>{wheelQuestion.topics?.name ?? 'Genel'}</div>
+                  </div>
+                  <span style={{ marginLeft:'auto', fontSize:'10px', fontWeight:700, padding:'2px 8px', borderRadius:'10px', background:'rgba(255,255,255,0.2)', color:'#fff' }}>
+                    {wheelQuestion.difficulty==='easy'?'Kolay':wheelQuestion.difficulty==='hard'?'Zor':'Orta'}
+                  </span>
+                </div>
+
+                <div style={{ padding:'16px', background:'#F8FAFC', borderBottom:'1px solid #E2E8F0' }}>
+                  <div style={{ fontSize:'14px', fontWeight:600, color:'#1B3A6B', lineHeight:1.6 }}>{wheelQuestion.question}</div>
+                </div>
+
+                <div style={{ padding:'12px', display:'flex', flexDirection:'column', gap:'8px' }}>
+                  {['A','B','C','D'].map(opt => {
+                    const text = wheelQuestion['option_'+opt.toLowerCase()]
+                    if (!text) return null
+                    const isSelected = wheelSelected === opt
+                    const isCorrect  = wheelQuestion.correct_answer === opt
+                    const isWrong    = isSelected && wheelResult === 'wrong'
+                    const showCorrect = wheelResult && isCorrect
+                    let bg = '#F8FAFC', border = '#E2E8F0', color = '#1B3A6B'
+                    if (showCorrect)  { bg='#DCFCE7'; border='#86EFAC'; color='#14532D' }
+                    else if (isWrong) { bg='#FEF2F2'; border='#FECACA'; color='#DC2626' }
+                    else if (isSelected) { bg='#EEF3FB'; border='#1B3A6B' }
+                    return (
+                      <button key={opt} onClick={() => answerWheel(opt)} disabled={!!wheelResult}
+                        style={{ display:'flex', alignItems:'center', gap:'12px', padding:'12px 14px', borderRadius:'10px', border:'2px solid '+border, background:bg, cursor:wheelResult?'default':'pointer', textAlign:'left' }}>
+                        <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:showCorrect?'#10B981':isWrong?'#DC2626':'#1B3A6B', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', fontWeight:700, color:'#fff', flexShrink:0 }}>
+                          {showCorrect?'V':isWrong?'X':opt}
+                        </div>
+                        <span style={{ fontSize:'13px', fontWeight:isSelected?700:500, color }}>{text}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {wheelResult && (
+                  <div style={{ padding:'12px 16px', borderTop:'1px solid #E2E8F0' }}>
+                    {wheelResult === 'correct' ? (
+                      <div style={{ background:'#DCFCE7', border:'1px solid #86EFAC', borderRadius:'10px', padding:'12px 14px', display:'flex', alignItems:'center', gap:'10px', marginBottom:'10px' }}>
+                        <span style={{ fontSize:'24px' }}>Dogru! +10 puan</span>
+                        <div style={{ fontSize:'12px', color:'#14532D', opacity:0.8 }}>
+                          {wheelStreak > 1 ? wheelStreak+' ust uste dogru!' : 'Harika is!'}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:'10px', padding:'12px 14px', marginBottom:'10px' }}>
+                        <div style={{ fontSize:'13px', fontWeight:700, color:'#DC2626', marginBottom:wheelExplain?'8px':0 }}>
+                          Dogru cevap: {wheelQuestion.correct_answer} — {wheelQuestion['option_'+wheelQuestion.correct_answer.toLowerCase()]}
+                        </div>
+                        {wheelLoading && <div style={{ fontSize:'12px', color:'#94A3B8' }}>AI aciklama hazirlaniyor...</div>}
+                        {wheelExplain && (
+                          <div style={{ fontSize:'12px', color:'#374151', lineHeight:1.6, padding:'8px', background:'rgba(255,255,255,0.6)', borderRadius:'8px' }}>{wheelExplain}</div>
+                        )}
+                      </div>
+                    )}
+                    <button onClick={spinWheel} style={{ width:'100%', padding:'12px', borderRadius:'10px', background:'#1B3A6B', color:'#fff', fontSize:'13px', fontWeight:700, border:'none', cursor:'pointer' }}>
+                      Sonraki Soru
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── SWOT ── */
         {activeTab === 'swot' && (
           <div>
             <div style={{ fontSize:'16px', fontWeight:700, color:'#1B3A6B', marginBottom:'14px' }}>🔍 SWOT Analizim</div>
