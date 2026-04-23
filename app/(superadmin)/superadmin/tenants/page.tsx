@@ -15,9 +15,11 @@ export default function TenantsPage() {
     address:'', max_students:50, max_teachers:10,
     admin_email:'', admin_name:''
   })
-  const [saving, setSaving] = useState(false)
-  const [error, setError]   = useState('')
-  const [search, setSearch] = useState('')
+  const [saving, setSaving]   = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [error, setError]     = useState('')
+  const [search, setSearch]   = useState('')
+  const [inviteResult, setInviteResult] = useState('')
   const supabase = createClient()
 
   useEffect(() => { load() }, [])
@@ -36,23 +38,25 @@ export default function TenantsPage() {
   }
 
   async function selectTenant(t: any) {
-    setSelected(t); await loadTenantUsers(t.id)
+    setSelected(t); setInviteResult(''); await loadTenantUsers(t.id)
   }
 
   async function handleCreate(e: React.FormEvent) {
-    e.preventDefault(); setSaving(true); setError('')
+    e.preventDefault(); setSaving(true); setError(''); setInviteResult('')
 
-    // 1. Tenant oluştur
     const { data: newTenant, error: err } = await supabase
       .from('tenants')
-      .insert({ name:form.name, slug:form.slug, plan:form.plan, contact_email:form.contact_email, phone:form.phone, address:form.address, max_students:form.max_students, max_teachers:form.max_teachers, is_active:true })
+      .insert({
+        name:form.name, slug:form.slug, plan:form.plan,
+        contact_email:form.contact_email, phone:form.phone,
+        address:form.address, max_students:form.max_students,
+        max_teachers:form.max_teachers, is_active:true
+      })
       .select()
       .single()
 
     if (err) { setError(err.message); setSaving(false); return }
-    console.log('Admin davet:', form.admin_email, form.admin_name)
 
-    // 2. Admin davet et (opsiyonel)
     if (form.admin_email && form.admin_name) {
       const res = await fetch('/api/admin/invite-user', {
         method: 'POST',
@@ -68,6 +72,8 @@ export default function TenantsPage() {
       if (!d.success) {
         setError('Kurum oluşturuldu ama admin daveti başarısız: ' + d.error)
         setSaving(false); load(); return
+      } else {
+        setInviteResult(`✅ ${form.admin_email} adresine davet maili gönderildi.`)
       }
     }
 
@@ -77,7 +83,38 @@ export default function TenantsPage() {
   }
 
   async function toggleActive(id: string, current: boolean) {
-    await supabase.from('tenants').update({ is_active:!current }).eq('id', id); load()
+    await supabase.from('tenants').update({ is_active:!current }).eq('id', id)
+    load()
+    if (selected?.id === id) setSelected((p: any) => ({ ...p, is_active: !current }))
+  }
+
+  async function handleDelete(id: string, name: string) {
+    if (!confirm(`"${name}" kurumunu silmek istediğinizden emin misiniz?\n\nBu işlem geri alınamaz! Tüm kullanıcı profilleri de silinecek.`)) return
+    setDeleting(true)
+    await supabase.from('profiles').delete().eq('tenant_id', id)
+    await supabase.from('tenants').delete().eq('id', id)
+    setSelected(null); setTenantUsers([])
+    setDeleting(false); load()
+  }
+
+  async function inviteAdmin(tenantId: string) {
+    const email = prompt('Admin e-posta adresi:')
+    if (!email) return
+    const name = prompt('Admin ad soyad:')
+    if (!name) return
+
+    const res = await fetch('/api/admin/invite-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, full_name: name, role: 'admin', tenant_id: tenantId }),
+    })
+    const d = await res.json()
+    if (d.success) {
+      setInviteResult(`✅ ${email} adresine davet maili gönderildi!`)
+      await loadTenantUsers(tenantId)
+    } else {
+      setInviteResult(`❌ Hata: ${d.error}`)
+    }
   }
 
   const filtered = tenants.filter(t =>
@@ -105,7 +142,6 @@ export default function TenantsPage() {
         </button>
       </div>
 
-      {/* Metrikler */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'10px', marginBottom:'16px' }}>
         {[
           { label:'Toplam Kurum', value:tenants.length, color:'#4C1D95', bg:'#EDE9FE' },
@@ -120,22 +156,13 @@ export default function TenantsPage() {
         ))}
       </div>
 
-      {/* Arama */}
       <div style={{ marginBottom:'14px' }}>
         <input value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Kurum adı veya slug ara..."
           style={{ ...inp, maxWidth:'360px' }} />
       </div>
 
-      {/* Mobil dropdown */}
-      <div style={{ marginBottom:'12px', display:'none' }} className="mob-select">
-        <select value={selected?.id??''} onChange={e => { const t = tenants.find(x => x.id === e.target.value); if (t) selectTenant(t) }} style={inp}>
-          <option value="">Kurum seçin...</option>
-          {filtered.map(t => <option key={t.id} value={t.id}>{t.name} ({t.plan})</option>)}
-        </select>
-      </div>
-
-      <div style={{ display:'grid', gap:'16px', gridTemplateColumns:'260px 1fr' }} className="tenants-layout">
+      <div style={{ display:'grid', gap:'16px', gridTemplateColumns:'260px 1fr' }}>
 
         {/* Sol: kurum listesi */}
         <div style={{ background:'#fff', borderRadius:'12px', border:'1px solid #E2E8F0', overflow:'hidden' }}>
@@ -160,10 +187,11 @@ export default function TenantsPage() {
         {/* Sağ: detay */}
         {!selected ? (
           <div style={{ background:'#F8FAFC', borderRadius:'12px', border:'1px solid #E2E8F0', padding:'48px', textAlign:'center' }}>
-            <div style={{ fontSize:'14px', color:'#7A8FA8' }}>Kurum seçin</div>
+            <div style={{ fontSize:'14px', color:'#7A8FA8' }}>Sol listeden kurum seçin</div>
           </div>
         ) : (
           <div>
+            {/* Kurum başlık */}
             <div style={{ background:'#1B3A6B', borderRadius:'12px', padding:'16px 18px', marginBottom:'12px' }}>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'10px' }}>
                 <div>
@@ -172,12 +200,28 @@ export default function TenantsPage() {
                     {selected.slug} · {selected.contact_email}
                   </div>
                 </div>
-                <button onClick={() => toggleActive(selected.id, selected.is_active)}
-                  style={{ padding:'7px 12px', borderRadius:'7px', border:'none', background:selected.is_active?'rgba(255,255,255,0.15)':'#DCFCE7', color:selected.is_active?'#fff':'#14532D', fontSize:'12px', fontWeight:600, cursor:'pointer' }}>
-                  {selected.is_active ? 'Pasife Al' : 'Aktive Et'}
-                </button>
+                <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
+                  <button onClick={() => inviteAdmin(selected.id)}
+                    style={{ padding:'7px 12px', borderRadius:'7px', border:'none', background:'#DCFCE7', color:'#14532D', fontSize:'12px', fontWeight:600, cursor:'pointer' }}>
+                    + Admin Davet Et
+                  </button>
+                  <button onClick={() => toggleActive(selected.id, selected.is_active)}
+                    style={{ padding:'7px 12px', borderRadius:'7px', border:'none', background:'rgba(255,255,255,0.15)', color:'#fff', fontSize:'12px', fontWeight:600, cursor:'pointer' }}>
+                    {selected.is_active ? 'Pasife Al' : 'Aktive Et'}
+                  </button>
+                  <button onClick={() => handleDelete(selected.id, selected.name)} disabled={deleting}
+                    style={{ padding:'7px 12px', borderRadius:'7px', border:'none', background:'#FEF2F2', color:'#DC2626', fontSize:'12px', fontWeight:600, cursor:'pointer' }}>
+                    {deleting ? 'Siliniyor...' : 'Kurumu Sil'}
+                  </button>
+                </div>
               </div>
             </div>
+
+            {inviteResult && (
+              <div style={{ background: inviteResult.startsWith('✅') ? '#DCFCE7' : '#FEF2F2', border:'1px solid', borderColor: inviteResult.startsWith('✅') ? '#86EFAC' : '#FECACA', borderRadius:'8px', padding:'10px 14px', marginBottom:'12px', fontSize:'13px', color: inviteResult.startsWith('✅') ? '#14532D' : '#DC2626', fontWeight:600 }}>
+                {inviteResult}
+              </div>
+            )}
 
             <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'10px', marginBottom:'14px' }}>
               {[
@@ -197,11 +241,13 @@ export default function TenantsPage() {
                 <div style={{ fontSize:'13px', fontWeight:700, color:'#1B3A6B' }}>Kullanıcılar ({tenantUsers.length})</div>
               </div>
               {tenantUsers.length === 0 ? (
-                <div style={{ padding:'24px', textAlign:'center', color:'#7A8FA8', fontSize:'13px' }}>Kullanıcı yok</div>
+                <div style={{ padding:'24px', textAlign:'center', color:'#7A8FA8', fontSize:'13px' }}>
+                  Kullanıcı yok — "+ Admin Davet Et" butonunu kullanın
+                </div>
               ) : tenantUsers.map((u, i) => {
                 const roleLabel = u.role==='teacher'?'Öğretmen':u.role==='student'?'Öğrenci':u.role==='admin'?'Admin':u.role==='parent'?'Veli':'Diğer'
-                const roleBg = u.role==='teacher'?'#DCFCE7':u.role==='student'?'#EEF3FB':u.role==='admin'?'#FEF3C7':'#EDE9FE'
-                const roleColor = u.role==='teacher'?'#14532D':u.role==='student'?'#1B3A6B':u.role==='admin'?'#92400E':'#4C1D95'
+                const roleBg = u.role==='admin'?'#FEF3C7':u.role==='teacher'?'#DCFCE7':u.role==='student'?'#EEF3FB':'#EDE9FE'
+                const roleColor = u.role==='admin'?'#92400E':u.role==='teacher'?'#14532D':u.role==='student'?'#1B3A6B':'#4C1D95'
                 return (
                   <div key={u.id} style={{ padding:'10px 16px', borderBottom:i<tenantUsers.length-1?'1px solid #F8FAFC':'none', display:'flex', alignItems:'center', gap:'10px' }}>
                     <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:'#EEF3FB', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px', fontWeight:700, color:'#1B3A6B', flexShrink:0 }}>
@@ -221,7 +267,7 @@ export default function TenantsPage() {
         )}
       </div>
 
-      {/* Modal */}
+      {/* Yeni Kurum Modal */}
       {showModal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:'16px' }}
           onClick={() => setShowModal(false)}>
@@ -233,7 +279,6 @@ export default function TenantsPage() {
             </div>
 
             <form onSubmit={handleCreate}>
-              {/* Kurum Bilgileri */}
               <div style={{ fontSize:'11px', fontWeight:700, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'10px' }}>Kurum Bilgileri</div>
 
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'10px' }}>
@@ -268,7 +313,6 @@ export default function TenantsPage() {
                 <div><label style={lbl}>Maks Öğretmen</label><input type="number" value={form.max_teachers} onChange={e => setForm(p => ({...p, max_teachers:parseInt(e.target.value)}))} style={inp} /></div>
               </div>
 
-              {/* Admin Davet */}
               <div style={{ height:'1px', background:'#F0F4F9', margin:'14px 0' }} />
               <div style={{ fontSize:'11px', fontWeight:700, color:'#4C1D95', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'10px' }}>
                 Admin Kullanıcı Daveti (Opsiyonel)
@@ -280,7 +324,7 @@ export default function TenantsPage() {
               </div>
 
               <div style={{ background:'#EEF3FB', border:'1px solid #BFDBFE', borderRadius:'8px', padding:'10px 12px', marginBottom:'16px', fontSize:'12px', color:'#1B3A6B' }}>
-                Girilirse admin kullanıcıya otomatik davet maili gönderilir. Giriş yapınca sadece bu kurumu yönetebilir.
+                Girilirse admin kullanıcıya otomatik davet maili gönderilir.
               </div>
 
               {error && (
@@ -301,13 +345,6 @@ export default function TenantsPage() {
           </div>
         </div>
       )}
-
-      <style>{`
-        @media (max-width: 767px) {
-          .tenants-layout { grid-template-columns: 1fr !important; }
-          .mob-select { display: block !important; }
-        }
-      `}</style>
     </div>
   )
 }
