@@ -50,6 +50,7 @@ export default function TenantsPage() {
       .single()
 
     if (err) { setError(err.message); setSaving(false); return }
+    console.log('Admin davet:', form.admin_email, form.admin_name)
 
     // 2. Admin davet et (opsiyonel)
     if (form.admin_email && form.admin_name) {
