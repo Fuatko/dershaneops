@@ -84,6 +84,27 @@ export default function LoginPage() {
   }
   
 
+  async function signInWithPassword() {
+    if (!email || !password) { setError('E-posta ve şifre gerekli.'); return }
+    setLoading(true); setError('')
+    const { data, error: err } = await supabase.auth.signInWithPassword({ email, password })
+    if (err) { setError('Giriş başarısız: ' + err.message); setLoading(false); return }
+    const { data: profile } = await supabase
+      .from('profiles').select('role').eq('user_id', data.user?.id).single()
+    if (!profile) {
+      await supabase.auth.signOut()
+      setError('Bu hesap sisteme kayıtlı değil.')
+      setLoading(false); return
+    }
+    const role = profile.role
+    if (role === 'admin' || role === 'superadmin') window.location.href = '/dashboard'
+    else if (role === 'teacher') window.location.href = '/teacher-panel'
+    else if (role === 'student') window.location.href = '/student-panel'
+    else if (role === 'parent') window.location.href = '/parent-panel'
+    else window.location.href = '/dashboard'
+    setLoading(false)
+  }
+
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(160deg, #F0F4F9 0%, #EEF3FB 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
       <div style={{ width: '100%', maxWidth: '420px', padding: '0 20px' }}>
