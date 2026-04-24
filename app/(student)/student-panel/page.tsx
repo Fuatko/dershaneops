@@ -174,6 +174,7 @@ export default function StudentPanelPage() {
   const [wheelTotal, setWheelTotal]       = useState(0)
   const [wheelCorrect, setWheelCorrect]   = useState(0)
   const wheelGoal = 10
+  const [examResults, setExamResults] = useState<any[]>([])
 
   useEffect(() => { load() }, [])
 
@@ -186,7 +187,7 @@ export default function StudentPanelPage() {
 
     const [
       { data: tp }, { data: hw }, { data: st }, { data: sb },
-      { data: dt }, { data: g }, { data: cal }, { data: notes }, { data: hols }
+      { data: dt }, { data: g }, { data: cal }, { data: notes }, { data: hols }, { data: exRes }
     ] = await Promise.all([
       supabase.from('student_topic_performance').select('*, topics(name), subjects(name)').eq('student_id', p.id).order('accuracy_rate', { ascending: true }),
       supabase.from('homework_assignments').select('*, tests(name, chapters(name, books(name)))').eq('student_id', p.id).order('created_at', { ascending: false }),
@@ -197,6 +198,7 @@ export default function StudentPanelPage() {
       supabase.from('study_calendar').select('*, subjects(name), topics(name)').eq('student_id', p.id).order('calendar_date'),
       supabase.from('calendar_notes').select('*, profiles!calendar_notes_teacher_id_fkey(full_name)').eq('student_id', p.id).order('calendar_date', { ascending: false }),
       supabase.from('public_holidays').select('*').order('holiday_date'),
+      supabase.from('exam_results').select('*, exams(id, name, exam_date, exam_type), subjects(id, name, color, section)').eq('student_id', p.id).order('created_at', { ascending: true }),
     ])
 
     const prevCount = badges.length
@@ -215,6 +217,7 @@ export default function StudentPanelPage() {
     setCalendar(cal ?? [])
     setCalendarNotes(notes ?? [])
     setHolidays(hols ?? [])
+    setExamResults(exRes ?? [])
     setLoading(false)
   }
 
@@ -416,6 +419,7 @@ export default function StudentPanelPage() {
     { id:'goals',    label:'Hedefler', icon:'🎯' },
     { id:'coach',    label:'AI Coach', icon:'🤖' },  // ← YENİ
     { id:'wheel',   label:'Soru Carki', icon:'🎡' },
+    { id:'exams',    label:'Sinavlar',  icon:'📝' },
     { id:'swot',     label:'SWOT',     icon:'🔍' },
   ]
 
@@ -1156,6 +1160,135 @@ export default function StudentPanelPage() {
                 )}
               </div>
             )}
+          </div>
+        )}
+
+
+        {/* SINAVLAR */}
+        {activeTab === 'exams' && (
+          <div>
+            <div style={{ fontSize:'16px', fontWeight:700, color:'#1B3A6B', marginBottom:'6px' }}>Sinav Sonuclarim</div>
+            <div style={{ fontSize:'12px', color:'#94A3B8', marginBottom:'14px' }}>Tum deneme sinavlari, siralamayi ve ders bazli analizin</div>
+
+            {examResults.length === 0 ? (
+              <div style={{ background:'#F8FAFF', border:'1px solid #D5DFF0', borderRadius:'14px', padding:'32px', textAlign:'center' }}>
+                <div style={{ fontSize:'32px', marginBottom:'10px' }}>📝</div>
+                <div style={{ fontSize:'13px', fontWeight:700, color:'#1B3A6B' }}>Henuz sinav sonucu yok</div>
+              </div>
+            ) : (() => {
+              const examGroups = examResults.reduce((acc: any, r: any) => {
+                const key = r.exam_id
+                if (!acc[key]) acc[key] = { exam: r.exams, subjects: [], totalNet: 0, rank: r.rank_in_exam, percentile: r.percentile }
+                acc[key].subjects.push(r)
+                acc[key].totalNet += r.net
+                return acc
+              }, {})
+              const examList = Object.values(examGroups).sort((a: any, b: any) => new Date(a.exam?.exam_date).getTime() - new Date(b.exam?.exam_date).getTime()) as any[]
+              const allNets = examList.map((e: any) => e.totalNet)
+              const avg = (arr: number[]) => arr.length > 0 ? Math.round(arr.reduce((a: number, b: number) => a + b, 0) / arr.length * 10) / 10 : 0
+              const sections = ['SAYISAL','SOZEL','DIL','DIN']
+              const sectionLabels: Record<string,string> = { SAYISAL:'SAYISAL', SOZEL:'SOZEL', DIL:'DIL', DIN:'DIN' }
+              const sectionColors: Record<string,string> = { SAYISAL:'#1B3A6B', SOZEL:'#2E7D52', DIL:'#0F7070', DIN:'#B45309' }
+              const sectionBgs: Record<string,string> = { SAYISAL:'#EEF3FB', SOZEL:'#DCFCE7', DIL:'#CCFBF1', DIN:'#FEF3C7' }
+              const lastExam = examList[examList.length - 1] as any
+              const prevExam = examList[examList.length - 2] as any
+              const change = lastExam && prevExam ? lastExam.totalNet - prevExam.totalNet : null
+
+              const subjectAvgs = examResults.reduce((acc: any, r: any) => {
+                const name = r.subjects?.name ?? 'Diger'
+                const section = (r.subjects?.section ?? 'DIGER').toUpperCase().replace('Ö','O').replace('Ü','U').replace('Ş','S').replace('İ','I').replace('Ç','C').replace('Ğ','G')
+                if (!acc[name]) acc[name] = { nets: [], color: r.subjects?.color, section }
+                acc[name].nets.push(r.net)
+                return acc
+              }, {})
+
+              return (
+                <div>
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:'8px', marginBottom:'14px' }}>
+                    {[
+                      { label:'Toplam Sinav', value: examList.length, color:'#1B3A6B', bg:'#EEF3FB' },
+                      { label:'Genel Ort.', value: avg(allNets).toFixed(1)+' net', color:'#2E7D52', bg:'#DCFCE7' },
+                      { label:'Son Sinav', value: lastExam ? lastExam.totalNet.toFixed(1)+' net' : '-', color:'#B45309', bg:'#FEF3C7' },
+                      { label:'Son Sinav Siralama', value: lastExam?.rank ? lastExam.rank+'. sira' : '-', color:'#6B4FC8', bg:'#EDE9FE' },
+                    ].map(m => (
+                      <div key={m.label} style={{ background:m.bg, borderRadius:'12px', padding:'12px', textAlign:'center' }}>
+                        <div style={{ fontSize:'18px', fontWeight:800, color:m.color }}>{m.value}</div>
+                        <div style={{ fontSize:'10px', color:m.color, opacity:0.7, marginTop:'3px' }}>{m.label}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {examList.map((e: any, i: number) => {
+                    const sectionNets: Record<string,number> = {}
+                    sections.forEach(sec => { sectionNets[sec] = 0 })
+                    e.subjects.forEach((r: any) => {
+                      const sec = (r.subjects?.section ?? 'DIGER').toUpperCase().replace('Ö','O').replace('Ü','U').replace('Ş','S').replace('İ','I').replace('Ç','C').replace('Ğ','G')
+                      if (sectionNets[sec] !== undefined) sectionNets[sec] += r.net
+                    })
+                    const prev = i > 0 ? (examList[i-1] as any).totalNet : null
+                    const diff = prev !== null ? e.totalNet - prev : null
+                    return (
+                      <div key={e.exam?.id} style={{ background:'#fff', borderRadius:'14px', border:'1px solid #E2E8F0', padding:'14px', marginBottom:'10px' }}>
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'12px' }}>
+                          <div>
+                            <div style={{ fontSize:'13px', fontWeight:700, color:'#1B3A6B' }}>{e.exam?.name}</div>
+                            <div style={{ fontSize:'11px', color:'#94A3B8' }}>{e.exam?.exam_date ? new Date(e.exam.exam_date).toLocaleDateString('tr-TR') : '-'}</div>
+                          </div>
+                          <div style={{ textAlign:'right', display:'flex', gap:'8px', alignItems:'center' }}>
+                            {e.rank && (
+                              <div style={{ width:'30px', height:'30px', borderRadius:'50%', background:e.rank<=3?['#FFD700','#C0C0C0','#CD7F32'][e.rank-1]:'#EEF3FB', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', fontWeight:800, color:e.rank<=3?'#fff':'#1B3A6B' }}>
+                                {e.rank}
+                              </div>
+                            )}
+                            {e.percentile && (
+                              <span style={{ fontSize:'10px', fontWeight:700, padding:'2px 8px', borderRadius:'10px', background:e.percentile>=75?'#DCFCE7':e.percentile>=50?'#EEF3FB':'#FEF2F2', color:e.percentile>=75?'#14532D':e.percentile>=50?'#1B3A6B':'#DC2626' }}>
+                                %{e.percentile}lik
+                              </span>
+                            )}
+                            <div style={{ textAlign:'center' }}>
+                              <div style={{ fontSize:'20px', fontWeight:800, color:'#1B3A6B' }}>{e.totalNet.toFixed(1)}</div>
+                              {diff !== null && <div style={{ fontSize:'10px', color:diff>0?'#14532D':diff<0?'#DC2626':'#94A3B8', fontWeight:700 }}>{diff>0?'+':''}{diff.toFixed(1)}</div>}
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:'6px' }}>
+                          {e.subjects.map((r: any) => (
+                            <div key={r.id} style={{ display:'flex', justifyContent:'space-between', padding:'6px 10px', borderRadius:'8px', background:'#F8FAFC' }}>
+                              <span style={{ fontSize:'11px', color:'#475569', fontWeight:600 }}>{r.subjects?.name}</span>
+                              <span style={{ fontSize:'11px', fontWeight:700, color: r.net >= 8 ? '#14532D' : r.net >= 5 ? '#B45309' : '#DC2626' }}>{r.net.toFixed(1)} net</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  <div style={{ background:'#fff', borderRadius:'14px', border:'1px solid #E2E8F0', padding:'14px', marginTop:'14px' }}>
+                    <div style={{ fontSize:'13px', fontWeight:700, color:'#1B3A6B', marginBottom:'12px' }}>Ders Bazli Ortalamalarim</div>
+                    {Object.entries(subjectAvgs).sort((a: any, b: any) => avg(b[1].nets) - avg(a[1].nets)).map(([name, v]: any) => {
+                      const subAvg = avg(v.nets)
+                      const isStrong = subAvg >= 8
+                      const isWeak = subAvg < 4
+                      return (
+                        <div key={name} style={{ marginBottom:'10px' }}>
+                          <div style={{ display:'flex', justifyContent:'space-between', marginBottom:'4px' }}>
+                            <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+                              <span style={{ fontSize:'12px', color:'#475569', fontWeight:600 }}>{name}</span>
+                              {isStrong && <span style={{ fontSize:'9px', fontWeight:700, padding:'1px 6px', borderRadius:'8px', background:'#DCFCE7', color:'#14532D' }}>GUCLU</span>}
+                              {isWeak && <span style={{ fontSize:'9px', fontWeight:700, padding:'1px 6px', borderRadius:'8px', background:'#FEF2F2', color:'#DC2626' }}>GELISTIR</span>}
+                            </div>
+                            <span style={{ fontSize:'13px', fontWeight:800, color:isStrong?'#14532D':isWeak?'#DC2626':'#B45309' }}>{subAvg.toFixed(1)}</span>
+                          </div>
+                          <div style={{ height:'6px', background:'#F1F5F9', borderRadius:'3px', overflow:'hidden' }}>
+                            <div style={{ height:'100%', width:Math.min(subAvg/20*100, 100)+'%', background:isStrong?'#10B981':isWeak?'#DC2626':'#D97706', borderRadius:'3px' }} />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         )}
 
