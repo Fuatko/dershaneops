@@ -45,6 +45,8 @@ export default function TestSolvePage({ params }: PageProps) {
         for (const ans of existingAnswers ?? []) {
           ansMap[ans.question_no] = ans.given_answer
         }
+        console.log('DEBUG answer_keys:', a.tests?.answer_keys)
+        console.log('DEBUG ansMap:', ansMap)
         setAnswers(ansMap)
         setSubmitted(true)
         calcResults(a, ansMap)
