@@ -26,7 +26,7 @@ export default function TestSolvePage({ params }: PageProps) {
           *,
           tests (
             id, name, question_count,
-            chapters ( name, books ( name, subject, color ) ),
+            chapters ( name, books ( id, name, subject, color, tenant_id ) ),
             answer_keys ( question_no, correct_answer )
           )
         `)
@@ -126,7 +126,7 @@ try {
     const totalQ = test?.question_count ?? 0
 
     await supabase.from('student_question_attempts').insert({
-      tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
+      tenant_id: assignment.tests?.chapters?.books?.tenant_id ?? null,
       student_id: assignment.student_id,
       subject_id: subjectData?.id ?? null,
       attempt_date: new Date().toISOString().slice(0, 10),
@@ -152,7 +152,7 @@ try {
       const trend = existing ? (acc > existing.accuracy_rate ? 'up' : acc < existing.accuracy_rate ? 'down' : 'stable') : 'stable'
 
       await supabase.from('student_topic_performance').upsert({
-        tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
+        tenant_id: assignment.tests?.chapters?.books?.tenant_id ?? null,
         student_id: assignment.student_id,
         subject_id: subjectData.id,
         topic_id: null,
