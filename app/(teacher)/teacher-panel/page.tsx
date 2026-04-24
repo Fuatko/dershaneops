@@ -925,9 +925,8 @@ const [hwFilterStatus, setHwFilterStatus] = useState('all')
   </div>
 )}
 
-      </div>
 
-        {/* SINAVLAR */}
+{/* SINAVLAR */}
         {activeTab === 'exams' && (
           <div>
             <div style={{ fontSize:'15px', fontWeight:700, color:P.navy, marginBottom:'6px' }}>Sinif Sinav Analizi</div>
