@@ -17,6 +17,7 @@ export default function ParentPanelPage() {
   const [calNotes, setCalNotes]     = useState<any[]>([])
   const [riskScore, setRiskScore]   = useState<number>(0)
   const [aiReport, setAiReport]     = useState('')
+  const [examResults, setExamResults] = useState<any[]>([])
   const [aiLoading, setAiLoading]   = useState(false)
   const [loading, setLoading]       = useState(true)
   const [activeTab, setActiveTab]   = useState('summary')
@@ -56,7 +57,7 @@ export default function ParentPanelPage() {
     const [
       { data: tp }, { data: hw }, { data: g },
       { data: st }, { data: cal }, { data: notes },
-      { data: risk }
+      { data: risk }, { data: exRes }
     ] = await Promise.all([
       supabase.from('student_topic_performance').select('*, topics(name), subjects(name)').eq('student_id', child.id).order('accuracy_rate', { ascending: true }),
       supabase.from('homework_assignments').select('*, tests(name, chapters(name, books(name)))').eq('student_id', child.id).order('created_at', { ascending: false }),
@@ -65,6 +66,7 @@ export default function ParentPanelPage() {
       supabase.from('study_calendar').select('*, subjects(name)').eq('student_id', child.id).order('calendar_date', { ascending: false }).limit(30),
       supabase.from('calendar_notes').select('*, profiles!calendar_notes_teacher_id_fkey(full_name)').eq('student_id', child.id).order('calendar_date', { ascending: false }).limit(10),
       supabase.rpc('calculate_risk_score', { p_student_id: child.id }),
+      supabase.from('exam_results').select('*, exams(id, name, exam_date, exam_type), subjects(id, name, color, section)').eq('student_id', child.id).order('created_at', { ascending: true }),
     ])
     setTopicPerf(tp ?? [])
     setHomework(hw ?? [])
@@ -73,6 +75,7 @@ export default function ParentPanelPage() {
     setCalendar(cal ?? [])
     setCalNotes(notes ?? [])
     setRiskScore(Math.round(risk ?? 0))
+    setExamResults(exRes ?? [])
   }
 
   async function getAiReport() {
@@ -123,6 +126,7 @@ export default function ParentPanelPage() {
     { id:'homework',    label:'Ödevler',     icon:'📚' },
     { id:'calendar',    label:'Takvim',      icon:'🗓' },
     { id:'goals',       label:'Hedefler',    icon:'🎯' },
+    { id:'exams',       label:'Sinavlar',    icon:'📝' },
     { id:'report',      label:'AI Rapor',    icon:'🤖' },
   ]
 
@@ -408,6 +412,90 @@ export default function ParentPanelPage() {
                     </div>
                   )
                 })}
+              </div>
+            )}
+
+
+            {/* SINAVLAR */}
+            {activeTab === 'exams' && (
+              <div>
+                <div style={{ fontSize:'16px', fontWeight:700, color:'#1B3A6B', marginBottom:'6px' }}>Sinav Sonuclari</div>
+                <div style={{ fontSize:'12px', color:'#94A3B8', marginBottom:'14px' }}>{selected.full_name} adli ogrencinin sinav gecmisi</div>
+
+                {examResults.length === 0 ? (
+                  <div style={{ background:'#F8FAFC', borderRadius:'12px', padding:'32px', textAlign:'center', color:'#94A3B8' }}>
+                    <div style={{ fontSize:'24px', marginBottom:'8px' }}>📝</div>
+                    Henuz sinav sonucu yok
+                  </div>
+                ) : (() => {
+                  const examGroups = examResults.reduce((acc: any, r: any) => {
+                    const key = r.exam_id
+                    if (!acc[key]) acc[key] = { exam: r.exams, subjects: [], totalNet: 0, rank: r.rank_in_exam, percentile: r.percentile }
+                    acc[key].subjects.push(r)
+                    acc[key].totalNet += r.net
+                    return acc
+                  }, {})
+                  const examList = Object.values(examGroups).sort((a: any, b: any) => new Date(a.exam?.exam_date).getTime() - new Date(b.exam?.exam_date).getTime()) as any[]
+                  const allNets = examList.map((e: any) => e.totalNet)
+                  const avg = (arr: number[]) => arr.length > 0 ? Math.round(arr.reduce((a: number, b: number) => a + b, 0) / arr.length * 10) / 10 : 0
+
+                  return (
+                    <div>
+                      <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:'8px', marginBottom:'14px' }}>
+                        {[
+                          { label:'Toplam Sinav', value: examList.length, color:'#1B3A6B', bg:'#EEF3FB' },
+                          { label:'Genel Ort.', value: avg(allNets).toFixed(1)+' net', color:'#2E7D52', bg:'#DCFCE7' },
+                          { label:'Son Sinav', value: examList.length > 0 ? (examList[examList.length-1] as any).totalNet.toFixed(1)+' net' : '-', color:'#B45309', bg:'#FEF3C7' },
+                          { label:'Son Siralama', value: examList.length > 0 && (examList[examList.length-1] as any).rank ? (examList[examList.length-1] as any).rank+'. sira' : '-', color:'#6B4FC8', bg:'#EDE9FE' },
+                        ].map(m => (
+                          <div key={m.label} style={{ background:m.bg, borderRadius:'12px', padding:'12px', textAlign:'center' }}>
+                            <div style={{ fontSize:'18px', fontWeight:800, color:m.color }}>{m.value}</div>
+                            <div style={{ fontSize:'10px', color:m.color, opacity:0.7, marginTop:'3px' }}>{m.label}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {examList.map((e: any, i: number) => {
+                        const prev = i > 0 ? (examList[i-1] as any).totalNet : null
+                        const diff = prev !== null ? e.totalNet - prev : null
+                        return (
+                          <div key={e.exam?.id} style={{ background:'#fff', borderRadius:'14px', border:'1px solid #E2E8F0', padding:'14px', marginBottom:'10px' }}>
+                            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'10px' }}>
+                              <div>
+                                <div style={{ fontSize:'13px', fontWeight:700, color:'#1B3A6B' }}>{e.exam?.name}</div>
+                                <div style={{ fontSize:'11px', color:'#94A3B8' }}>{e.exam?.exam_date ? new Date(e.exam.exam_date).toLocaleDateString('tr-TR') : '-'}</div>
+                              </div>
+                              <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
+                                {e.rank && (
+                                  <div style={{ width:'28px', height:'28px', borderRadius:'50%', background:e.rank<=3?['#FFD700','#C0C0C0','#CD7F32'][e.rank-1]:'#EEF3FB', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', fontWeight:800, color:e.rank<=3?'#fff':'#1B3A6B' }}>
+                                    {e.rank}
+                                  </div>
+                                )}
+                                {e.percentile && (
+                                  <span style={{ fontSize:'10px', fontWeight:700, padding:'2px 7px', borderRadius:'10px', background:e.percentile>=75?'#DCFCE7':e.percentile>=50?'#EEF3FB':'#FEF2F2', color:e.percentile>=75?'#14532D':e.percentile>=50?'#1B3A6B':'#DC2626' }}>
+                                    %{e.percentile}lik
+                                  </span>
+                                )}
+                                <div style={{ textAlign:'right' }}>
+                                  <div style={{ fontSize:'20px', fontWeight:800, color:'#1B3A6B' }}>{e.totalNet.toFixed(1)}</div>
+                                  {diff !== null && <div style={{ fontSize:'10px', color:diff>0?'#14532D':diff<0?'#DC2626':'#94A3B8', fontWeight:700 }}>{diff>0?'+':''}{diff.toFixed(1)}</div>}
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:'5px' }}>
+                              {e.subjects.map((r: any) => (
+                                <div key={r.id} style={{ display:'flex', justifyContent:'space-between', padding:'5px 8px', borderRadius:'7px', background:'#F8FAFC' }}>
+                                  <span style={{ fontSize:'11px', color:'#475569', fontWeight:600 }}>{r.subjects?.name}</span>
+                                  <span style={{ fontSize:'11px', fontWeight:700, color:r.net>=8?'#14532D':r.net>=5?'#B45309':'#DC2626' }}>{r.net.toFixed(1)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
               </div>
             )}
 
