@@ -101,6 +101,8 @@ export default function TeacherPanelPage() {
 const [hwFilterStudent, setHwFilterStudent] = useState('')
 const [hwFilterStatus, setHwFilterStatus] = useState('all')
   const [form, setForm] = useState({ student_id:'', subject_id:'', topic_id:'', attempt_date:localDate(), correct_count:0, wrong_count:0, blank_count:0, difficulty_level:'medium', notes:'' })
+  const [examResults, setExamResults] = useState<any[]>([])
+  const [selectedExamStudent, setSelectedExamStudent] = useState<any>(null)
   const supabase = createClient()
   const todayStr = localDate()
 
@@ -259,6 +261,7 @@ const [hwFilterStatus, setHwFilterStatus] = useState('all')
     { id:'questions', label:'Soru Girişi', Icon:Icon.pencil },
     { id:'assign', label:'Ödev Ata', Icon:Icon.clipboard },
     { id:'homework', label:'Ödevler', Icon:Icon.book },
+    { id:'exams', label:'Sinavlar', Icon:Icon.clipboard },
   ]
 
   if (loading) return (
@@ -923,6 +926,76 @@ const [hwFilterStatus, setHwFilterStatus] = useState('all')
 )}
 
       </div>
+        {activeTab === 'exams' && (
+          <div style={{ padding:'16px 0' }}>
+            <div style={{ fontSize:'15px', fontWeight:700, color:P.navy, marginBottom:'6px' }}>Sinif Sinav Analizi</div>
+            <div style={{ fontSize:'12px', color:P.muted, marginBottom:'14px' }}>Ogrenci secin, sinav gecmisini gorun</div>
+            <select value={selectedExamStudent?.id ?? ''} onChange={async e => {
+              const s = students.find((st:any) => st.id === e.target.value)
+              if (!s) { setSelectedExamStudent(null); setExamResults([]); return }
+              setSelectedExamStudent(s)
+              const { data } = await supabase.from('exam_results')
+                .select('*, exams(id, name, exam_date), subjects(id, name)')
+                .eq('student_id', s.id).order('created_at', { ascending: true })
+              setExamResults(data ?? [])
+            }} style={{ width:'100%', padding:'10px 12px', borderRadius:'9px', border:'1px solid '+P.border, fontSize:'13px', color:P.navy, outline:'none', background:P.white, fontFamily:'inherit', marginBottom:'14px' }}>
+              <option value="">Ogrenci secin...</option>
+              {students.map((s:any) => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+            </select>
+            {selectedExamStudent && examResults.length === 0 && (
+              <div style={{ background:P.slateLight, borderRadius:'12px', padding:'32px', textAlign:'center', color:P.muted }}>Bu ogrenci icin sinav sonucu yok</div>
+            )}
+            {selectedExamStudent && examResults.length > 0 && (() => {
+              const groups = examResults.reduce((acc:any, r:any) => {
+                if (!acc[r.exam_id]) acc[r.exam_id] = { exam:r.exams, subjects:[], total:0 }
+                acc[r.exam_id].subjects.push(r); acc[r.exam_id].total += r.net; return acc
+              }, {})
+              const list = Object.values(groups).sort((a:any,b:any) => new Date(a.exam?.exam_date).getTime()-new Date(b.exam?.exam_date).getTime()) as any[]
+              const nets = list.map((e:any)=>e.total)
+              const avg = (a:number[]) => a.length>0 ? Math.round(a.reduce((x,y)=>x+y,0)/a.length*10)/10 : 0
+              return (
+                <div>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px', marginBottom:'14px' }}>
+                    <div style={{ background:P.navyLight, borderRadius:'10px', padding:'10px', textAlign:'center' }}>
+                      <div style={{ fontSize:'16px', fontWeight:800, color:P.navy }}>{list.length}</div>
+                      <div style={{ fontSize:'10px', color:P.navy, opacity:0.7 }}>Toplam Sinav</div>
+                    </div>
+                    <div style={{ background:P.greenLight, borderRadius:'10px', padding:'10px', textAlign:'center' }}>
+                      <div style={{ fontSize:'16px', fontWeight:800, color:P.green }}>{avg(nets).toFixed(1)} net</div>
+                      <div style={{ fontSize:'10px', color:P.green, opacity:0.7 }}>Genel Ort.</div>
+                    </div>
+                  </div>
+                  {list.map((e:any, i:number) => {
+                    const prev = i>0 ? (list[i-1] as any).total : null
+                    const diff = prev!==null ? e.total-prev : null
+                    return (
+                      <div key={e.exam?.id} style={{ background:P.white, borderRadius:'12px', border:'1px solid '+P.border, padding:'12px', marginBottom:'8px' }}>
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'8px' }}>
+                          <div>
+                            <div style={{ fontSize:'12.5px', fontWeight:700, color:P.navy }}>{e.exam?.name}</div>
+                            <div style={{ fontSize:'11px', color:P.muted }}>{e.exam?.exam_date ? new Date(e.exam.exam_date).toLocaleDateString('tr-TR') : '-'}</div>
+                          </div>
+                          <div style={{ textAlign:'right' }}>
+                            <div style={{ fontSize:'18px', fontWeight:800, color:P.navy }}>{e.total.toFixed(1)}</div>
+                            {diff!==null && <div style={{ fontSize:'10px', color:diff>0?P.green:diff<0?'#DC2626':P.muted, fontWeight:700 }}>{diff>0?'+':''}{diff.toFixed(1)}</div>}
+                          </div>
+                        </div>
+                        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'4px' }}>
+                          {e.subjects.map((r:any) => (
+                            <div key={r.id} style={{ display:'flex', justifyContent:'space-between', padding:'5px 8px', borderRadius:'6px', background:P.slateLight }}>
+                              <span style={{ fontSize:'11px', color:P.slate, fontWeight:600 }}>{r.subjects?.name}</span>
+                              <span style={{ fontSize:'11px', fontWeight:700, color:r.net>=8?P.green:r.net>=5?'#B45309':'#DC2626' }}>{r.net.toFixed(1)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+          </div>
+        )}
       <AccessibilityWidget />
     </div>
   )
