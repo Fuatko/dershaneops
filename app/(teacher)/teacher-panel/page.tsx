@@ -259,6 +259,7 @@ const [hwFilterStatus, setHwFilterStatus] = useState('all')
     { id:'questions', label:'Soru Girişi', Icon:Icon.pencil },
     { id:'assign', label:'Ödev Ata', Icon:Icon.clipboard },
     { id:'homework', label:'Ödevler', Icon:Icon.book },
+    { id:'exams', label:'Sinavlar', Icon:Icon.clipboard },
   ]
 
   if (loading) return (
