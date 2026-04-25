@@ -259,7 +259,6 @@ const [hwFilterStatus, setHwFilterStatus] = useState('all')
     { id:'questions', label:'Soru Girişi', Icon:Icon.pencil },
     { id:'assign', label:'Ödev Ata', Icon:Icon.clipboard },
     { id:'homework', label:'Ödevler', Icon:Icon.book },
-    { id:'exams', label:'Sinavlar', Icon:Icon.clipboard },
   ]
 
   if (loading) return (
@@ -920,88 +919,10 @@ const [hwFilterStatus, setHwFilterStatus] = useState('all')
         </div>
       ))
     })()}
-        {/* SINAVLAR */}
-        {activeTab === 'exams' && (
-          <div>
-            <div style={{ fontSize:'15px', fontWeight:700, color:P.navy, marginBottom:'6px' }}>Sinif Sinav Analizi</div>
-            <div style={{ fontSize:'12px', color:P.muted, marginBottom:'14px' }}>Ogrenci secin, sinav gecmisini gorun</div>
-            <div style={{ marginBottom:'14px' }}>
-              <select value={selectedExamStudent?.id ?? ''} onChange={async e => {
-                const s = students.find((st: any) => st.id === e.target.value)
-                if (!s) return
-                setSelectedExamStudent(s)
-                const { data } = await supabase.from('exam_results')
-                  .select('*, exams(id, name, exam_date, exam_type), subjects(id, name, color, section)')
-                  .eq('student_id', s.id)
-                  .order('created_at', { ascending: true })
-                setExamResults(data ?? [])
-              }} style={{ width:'100%', padding:'10px 12px', borderRadius:'9px', border:'1px solid '+P.border, fontSize:'13px', color:P.navy, outline:'none', background:P.white, fontFamily:'inherit' }}>
-                <option value="">Ogrenci secin...</option>
-                {students.map((s: any) => (
-                  <option key={s.id} value={s.id}>{s.full_name}</option>
-                ))}
-              </select>
-            </div>
-            {selectedExamStudent && examResults.length === 0 && (
-              <div style={{ background:P.slateLight, borderRadius:'12px', padding:'32px', textAlign:'center', color:P.muted }}>
-                Bu ogrenci icin sinav sonucu yok
-              </div>
-            )}
-            {selectedExamStudent && examResults.length > 0 && (() => {
-              const examGroups = examResults.reduce((acc: any, r: any) => {
-                const key = r.exam_id
-                if (!acc[key]) acc[key] = { exam: r.exams, subjects: [], totalNet: 0, rank: r.rank_in_exam }
-                acc[key].subjects.push(r)
-                acc[key].totalNet += r.net
-                return acc
-              }, {})
-              const examList = Object.values(examGroups).sort((a: any, b: any) => new Date(a.exam?.exam_date).getTime() - new Date(b.exam?.exam_date).getTime()) as any[]
-              const allNets = examList.map((e: any) => e.totalNet)
-              const avg = (arr: number[]) => arr.length > 0 ? Math.round(arr.reduce((a: number, b: number) => a + b, 0) / arr.length * 10) / 10 : 0
-              return (
-                <div>
-                  <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:'8px', marginBottom:'14px' }}>
-                    {[
-                      { label:'Toplam Sinav', value: examList.length, color:P.navy, bg:P.navyLight },
-                      { label:'Genel Ort.', value: avg(allNets).toFixed(1)+' net', color:P.green, bg:P.greenLight },
-                    ].map(m => (
-                      <div key={m.label} style={{ background:m.bg, borderRadius:'10px', padding:'10px', textAlign:'center' }}>
-                        <div style={{ fontSize:'16px', fontWeight:800, color:m.color }}>{m.value}</div>
-                        <div style={{ fontSize:'10px', color:m.color, opacity:0.7 }}>{m.label}</div>
-                      </div>
-                    ))}
-                  </div>
-                  {examList.map((e: any, i: number) => {
-                    const prev = i > 0 ? (examList[i-1] as any).totalNet : null
-                    const diff = prev !== null ? e.totalNet - prev : null
-                    return (
-                      <div key={e.exam?.id} style={{ background:P.white, borderRadius:'12px', border:'1px solid '+P.border, padding:'12px', marginBottom:'8px' }}>
-                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'8px' }}>
-                          <div>
-                            <div style={{ fontSize:'12.5px', fontWeight:700, color:P.navy }}>{e.exam?.name}</div>
-                            <div style={{ fontSize:'11px', color:P.muted }}>{e.exam?.exam_date ? new Date(e.exam.exam_date).toLocaleDateString('tr-TR') : '-'}</div>
-                          </div>
-                          <div style={{ textAlign:'right' }}>
-                            <div style={{ fontSize:'18px', fontWeight:800, color:P.navy }}>{e.totalNet.toFixed(1)}</div>
-                            {diff !== null && <div style={{ fontSize:'10px', color:diff>0?P.green:diff<0?'#DC2626':P.muted, fontWeight:700 }}>{diff>0?'+':''}{diff.toFixed(1)}</div>}
-                          </div>
-                        </div>
-                        <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:'4px' }}>
-                          {e.subjects.map((r: any) => (
-                            <div key={r.id} style={{ display:'flex', justifyContent:'space-between', padding:'5px 8px', borderRadius:'6px', background:P.slateLight }}>
-                              <span style={{ fontSize:'11px', color:P.slate, fontWeight:600 }}>{r.subjects?.name}</span>
-                              <span style={{ fontSize:'11px', fontWeight:700, color:r.net>=8?P.green:r.net>=5?'#B45309':'#DC2626' }}>{r.net.toFixed(1)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )
-            })()}
-          </div>
-        )}
+  </div>
+)}
+
+      </div>
       <AccessibilityWidget />
     </div>
   )
