@@ -101,8 +101,6 @@ export default function TeacherPanelPage() {
 const [hwFilterStudent, setHwFilterStudent] = useState('')
 const [hwFilterStatus, setHwFilterStatus] = useState('all')
   const [form, setForm] = useState({ student_id:'', subject_id:'', topic_id:'', attempt_date:localDate(), correct_count:0, wrong_count:0, blank_count:0, difficulty_level:'medium', notes:'' })
-  const [examResults, setExamResults] = useState<any[]>([])
-  const [selectedExamStudent, setSelectedExamStudent] = useState<any>(null)
   const supabase = createClient()
   const todayStr = localDate()
 
@@ -172,14 +170,14 @@ const [hwFilterStatus, setHwFilterStatus] = useState('all')
   async function saveNote(e: React.FormEvent) {
     e.preventDefault(); if (!calendarStudent || !noteForm.note) return
     setSavingNote(true); setNoteSuccess(false)
-    await supabase.from('calendar_notes').upsert({ tenant_id: profile.tenant_id, student_id:calendarStudent.id, teacher_id:profile.id, calendar_date:selectedCalDate, note:noteForm.note, evaluation:noteForm.evaluation }, { onConflict:'student_id,teacher_id,calendar_date' })
+    await supabase.from('calendar_notes').upsert({ tenant_id:'61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f', student_id:calendarStudent.id, teacher_id:profile.id, calendar_date:selectedCalDate, note:noteForm.note, evaluation:noteForm.evaluation }, { onConflict:'student_id,teacher_id,calendar_date' })
     await loadStudentCalendar(calendarStudent.id); setNoteSuccess(true); setNoteForm({ note:'', evaluation:'good' }); setSavingNote(false)
   }
   async function saveCalItem(e: React.FormEvent) {
     e.preventDefault(); if (!calendarStudent || !newCalItem.title) return
     setSavingCalItem(true)
     const d = new Date(newCalItem.calendar_date + 'T12:00:00')
-    await supabase.from('study_calendar').insert({ tenant_id: profile.tenant_id, student_id:calendarStudent.id, subject_id:newCalItem.subject_id||null, topic_id:newCalItem.topic_id||null, calendar_date:newCalItem.calendar_date, day_of_week:d.getDay()===0?7:d.getDay(), title:newCalItem.title, duration_minutes:newCalItem.duration_minutes, question_count:newCalItem.question_count, created_by:profile.id })
+    await supabase.from('study_calendar').insert({ tenant_id:'61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f', student_id:calendarStudent.id, subject_id:newCalItem.subject_id||null, topic_id:newCalItem.topic_id||null, calendar_date:newCalItem.calendar_date, day_of_week:d.getDay()===0?7:d.getDay(), title:newCalItem.title, duration_minutes:newCalItem.duration_minutes, question_count:newCalItem.question_count, created_by:profile.id })
     await loadStudentCalendar(calendarStudent.id)
     setNewCalItem({ title:'', subject_id:'', topic_id:'', calendar_date:selectedCalDate, duration_minutes:45, question_count:0 })
     setShowAddForm(false); setSavingCalItem(false)
@@ -201,7 +199,7 @@ const [hwFilterStatus, setHwFilterStatus] = useState('all')
   async function handleAssign() {
     if (!selectedAssignStudent || selectedTests.length===0) { alert('Öğrenci ve test seçin!'); return }
     setAssigning(true); setAssignSuccess(false)
-    const inserts = selectedTests.map(testId => ({ student_id:selectedAssignStudent, test_id:testId, deadline:assignDeadline||null, status:'pending', tenant_id: profile.tenant_id }))
+    const inserts = selectedTests.map(testId => ({ student_id:selectedAssignStudent, test_id:testId, deadline:assignDeadline||null, status:'pending', tenant_id:'61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f' }))
     const { error } = await supabase.from('homework_assignments').insert(inserts)
     if (error) { alert('Hata: '+error.message); setAssigning(false); return }
     setAssignSuccess(true); setSelectedTests([]); setSelectedAssignStudent(''); setAssignDeadline('')
@@ -211,14 +209,14 @@ const [hwFilterStatus, setHwFilterStatus] = useState('all')
     e.preventDefault(); if (!form.student_id||!form.subject_id) { alert('Öğrenci ve ders seçin!'); return }
     setSaving(true); setSuccess(false)
     const total = form.correct_count+form.wrong_count+form.blank_count
-    await supabase.from('student_question_attempts').insert({ tenant_id: profile.tenant_id, student_id:form.student_id, teacher_id:profile.id, subject_id:form.subject_id, topic_id:form.topic_id||null, attempt_date:form.attempt_date, total_questions:total, correct_count:form.correct_count, wrong_count:form.wrong_count, blank_count:form.blank_count, difficulty_level:form.difficulty_level, source_type:'manual', notes:form.notes||null })
+    await supabase.from('student_question_attempts').insert({ tenant_id:'61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f', student_id:form.student_id, teacher_id:profile.id, subject_id:form.subject_id, topic_id:form.topic_id||null, attempt_date:form.attempt_date, total_questions:total, correct_count:form.correct_count, wrong_count:form.wrong_count, blank_count:form.blank_count, difficulty_level:form.difficulty_level, source_type:'manual', notes:form.notes||null })
     const query = supabase.from('student_question_attempts').select('total_questions,correct_count,wrong_count,blank_count,attempt_date').eq('student_id',form.student_id).eq('subject_id',form.subject_id)
     const { data: attempts } = form.topic_id ? await query.eq('topic_id',form.topic_id) : await query
     if (attempts && attempts.length>0) {
       const tQ=attempts.reduce((s,a)=>s+a.total_questions,0), tC=attempts.reduce((s,a)=>s+a.correct_count,0)
       const tW=attempts.reduce((s,a)=>s+a.wrong_count,0), tB=attempts.reduce((s,a)=>s+a.blank_count,0)
       const acc = tQ>0 ? Math.round(tC/tQ*100*100)/100 : 0
-      await supabase.from('student_topic_performance').upsert({ tenant_id: profile.tenant_id, student_id:form.student_id, subject_id:form.subject_id, topic_id:form.topic_id||null, total_questions:tQ, correct_count:tC, wrong_count:tW, blank_count:tB, accuracy_rate:acc, mastery_score:Math.round((acc*0.70+Math.min(attempts.length,10)*3.0)*100)/100, last_attempt_date:attempts[0].attempt_date, attempt_count:attempts.length, trend_direction:'stable', updated_at:new Date().toISOString() }, { onConflict:'student_id,subject_id,topic_id' })
+      await supabase.from('student_topic_performance').upsert({ tenant_id:'61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f', student_id:form.student_id, subject_id:form.subject_id, topic_id:form.topic_id||null, total_questions:tQ, correct_count:tC, wrong_count:tW, blank_count:tB, accuracy_rate:acc, mastery_score:Math.round((acc*0.70+Math.min(attempts.length,10)*3.0)*100)/100, last_attempt_date:attempts[0].attempt_date, attempt_count:attempts.length, trend_direction:'stable', updated_at:new Date().toISOString() }, { onConflict:'student_id,subject_id,topic_id' })
     }
     setSuccess(true); setForm(p => ({ ...p, correct_count:0, wrong_count:0, blank_count:0, notes:'', topic_id:'' }))
     await load(); setSaving(false)
@@ -261,7 +259,6 @@ const [hwFilterStatus, setHwFilterStatus] = useState('all')
     { id:'questions', label:'Soru Girişi', Icon:Icon.pencil },
     { id:'assign', label:'Ödev Ata', Icon:Icon.clipboard },
     { id:'homework', label:'Ödevler', Icon:Icon.book },
-    { id:'exams', label:'Sinavlar', Icon:Icon.clipboard },
   ]
 
   if (loading) return (
@@ -925,145 +922,7 @@ const [hwFilterStatus, setHwFilterStatus] = useState('all')
   </div>
 )}
 
-
-{/* SINAVLAR */}
-        {activeTab === 'exams' && (
-          <div>
-            <div style={{ fontSize:'15px', fontWeight:700, color:P.navy, marginBottom:'6px' }}>Sinif Sinav Analizi</div>
-            <div style={{ fontSize:'12px', color:P.muted, marginBottom:'14px' }}>Ogrenci secin, sinav gecmisini ve ders bazli analizini gor</div>
-
-            <div style={{ marginBottom:'14px' }}>
-              <select value={selectedExamStudent?.id ?? ''} onChange={async e => {
-                const s = students.find((st: any) => st.id === e.target.value)
-                if (!s) return
-                setSelectedExamStudent(s)
-                const { data } = await supabase.from('exam_results')
-                  .select('*, exams(id, name, exam_date, exam_type), subjects(id, name, color, section)')
-                  .eq('student_id', s.id)
-                  .order('created_at', { ascending: true })
-                setExamResults(data ?? [])
-              }} style={{ width:'100%', padding:'10px 12px', borderRadius:'9px', border:'1px solid '+P.border, fontSize:'13px', color:P.navy, outline:'none', background:P.white, fontFamily:'inherit' }}>
-                <option value="">Ogrenci secin...</option>
-                {students.map((s: any) => (
-                  <option key={s.id} value={s.id}>{s.full_name} {s.grade_level ? '- '+s.grade_level+'. Sinif' : ''}</option>
-                ))}
-              </select>
-            </div>
-
-            {selectedExamStudent && examResults.length === 0 && (
-              <div style={{ background:P.slateLight, borderRadius:'12px', padding:'32px', textAlign:'center', color:P.muted }}>
-                <div style={{ fontSize:'24px', marginBottom:'8px' }}>📝</div>
-                Bu ogrenci icin sinav sonucu yok
-              </div>
-            )}
-
-            {selectedExamStudent && examResults.length > 0 && (() => {
-              const examGroups = examResults.reduce((acc: any, r: any) => {
-                const key = r.exam_id
-                if (!acc[key]) acc[key] = { exam: r.exams, subjects: [], totalNet: 0, rank: r.rank_in_exam, percentile: r.percentile }
-                acc[key].subjects.push(r)
-                acc[key].totalNet += r.net
-                return acc
-              }, {})
-              const examList = Object.values(examGroups).sort((a: any, b: any) => new Date(a.exam?.exam_date).getTime() - new Date(b.exam?.exam_date).getTime()) as any[]
-              const allNets = examList.map((e: any) => e.totalNet)
-              const avg = (arr: number[]) => arr.length > 0 ? Math.round(arr.reduce((a: number, b: number) => a + b, 0) / arr.length * 10) / 10 : 0
-              const subjectAvgs = examResults.reduce((acc: any, r: any) => {
-                const name = r.subjects?.name ?? 'Diger'
-                if (!acc[name]) acc[name] = { nets: [], color: r.subjects?.color }
-                acc[name].nets.push(r.net)
-                return acc
-              }, {})
-
-              return (
-                <div>
-                  <div style={{ background:P.navy, borderRadius:'12px', padding:'14px 16px', marginBottom:'12px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                    <div>
-                      <div style={{ fontSize:'14px', fontWeight:800, color:'#fff' }}>{selectedExamStudent.full_name}</div>
-                      <div style={{ fontSize:'11px', color:'rgba(255,255,255,0.6)' }}>{examList.length} sinav · Genel Ort: {avg(allNets).toFixed(1)} net</div>
-                    </div>
-                    <div style={{ textAlign:'center', background:'rgba(255,255,255,0.15)', borderRadius:'10px', padding:'8px 14px' }}>
-                      <div style={{ fontSize:'22px', fontWeight:800, color:'#fff' }}>{(examList[examList.length-1] as any)?.totalNet.toFixed(1)}</div>
-                      <div style={{ fontSize:'10px', color:'rgba(255,255,255,0.6)' }}>Son Sinav</div>
-                    </div>
-                  </div>
-
-                  <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:'8px', marginBottom:'14px' }}>
-                    {[
-                      { label:'Toplam Sinav', value: examList.length, color:P.navy, bg:P.navyLight },
-                      { label:'Genel Ort.', value: avg(allNets).toFixed(1)+' net', color:P.green, bg:P.greenLight },
-                      { label:'Son 3 Ort.', value: avg(allNets.slice(-3)).toFixed(1)+' net', color:'#B45309', bg:'#FEF3C7' },
-                      { label:'En Yuksek', value: Math.max(...allNets, 0).toFixed(1)+' net', color:'#6B4FC8', bg:'#EDE9FE' },
-                    ].map(m => (
-                      <div key={m.label} style={{ background:m.bg, borderRadius:'10px', padding:'10px', textAlign:'center' }}>
-                        <div style={{ fontSize:'16px', fontWeight:800, color:m.color }}>{m.value}</div>
-                        <div style={{ fontSize:'10px', color:m.color, opacity:0.7 }}>{m.label}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {examList.map((e: any, i: number) => {
-                    const prev = i > 0 ? (examList[i-1] as any).totalNet : null
-                    const diff = prev !== null ? e.totalNet - prev : null
-                    return (
-                      <div key={e.exam?.id} style={{ background:P.white, borderRadius:'12px', border:'1px solid '+P.border, padding:'12px', marginBottom:'8px' }}>
-                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'8px' }}>
-                          <div>
-                            <div style={{ fontSize:'12.5px', fontWeight:700, color:P.navy }}>{e.exam?.name}</div>
-                            <div style={{ fontSize:'11px', color:P.muted }}>{e.exam?.exam_date ? new Date(e.exam.exam_date).toLocaleDateString('tr-TR') : '-'}</div>
-                          </div>
-                          <div style={{ display:'flex', gap:'6px', alignItems:'center' }}>
-                            {e.rank && (
-                              <div style={{ width:'26px', height:'26px', borderRadius:'50%', background:e.rank<=3?['#FFD700','#C0C0C0','#CD7F32'][e.rank-1]:P.navyLight, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px', fontWeight:800, color:e.rank<=3?'#fff':P.navy }}>
-                                {e.rank}
-                              </div>
-                            )}
-                            <div style={{ textAlign:'right' }}>
-                              <div style={{ fontSize:'18px', fontWeight:800, color:P.navy }}>{e.totalNet.toFixed(1)}</div>
-                              {diff !== null && <div style={{ fontSize:'10px', color:diff>0?P.green:diff<0?'#DC2626':P.muted, fontWeight:700 }}>{diff>0?'+':''}{diff.toFixed(1)}</div>}
-                            </div>
-                          </div>
-                        </div>
-                        <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:'4px' }}>
-                          {e.subjects.map((r: any) => (
-                            <div key={r.id} style={{ display:'flex', justifyContent:'space-between', padding:'5px 8px', borderRadius:'6px', background:P.slateLight }}>
-                              <span style={{ fontSize:'11px', color:P.slate, fontWeight:600 }}>{r.subjects?.name}</span>
-                              <span style={{ fontSize:'11px', fontWeight:700, color:r.net>=8?P.green:r.net>=5?'#B45309':'#DC2626' }}>{r.net.toFixed(1)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )
-                  })}
-
-                  <div style={{ background:P.white, borderRadius:'12px', border:'1px solid '+P.border, padding:'14px', marginTop:'8px' }}>
-                    <div style={{ fontSize:'13px', fontWeight:700, color:P.navy, marginBottom:'10px' }}>Ders Bazli Ortalama</div>
-                    {Object.entries(subjectAvgs).sort((a: any, b: any) => avg(b[1].nets) - avg(a[1].nets)).map(([name, v]: any) => {
-                      const subAvg = avg(v.nets)
-                      const isStrong = subAvg >= 8
-                      const isWeak = subAvg < 4
-                      return (
-                        <div key={name} style={{ marginBottom:'10px' }}>
-                          <div style={{ display:'flex', justifyContent:'space-between', marginBottom:'4px' }}>
-                            <div style={{ display:'flex', alignItems:'center', gap:'5px' }}>
-                              <span style={{ fontSize:'12px', color:P.slate, fontWeight:600 }}>{name}</span>
-                              {isStrong && <span style={{ fontSize:'9px', fontWeight:700, padding:'1px 5px', borderRadius:'6px', background:P.greenLight, color:P.green }}>GUCLU</span>}
-                              {isWeak && <span style={{ fontSize:'9px', fontWeight:700, padding:'1px 5px', borderRadius:'6px', background:'#FEF2F2', color:'#DC2626' }}>GELISTIan>}
-                            </div>
-                            <span style={{ fontSize:'13px', fontWeight:800, color:isStrong?P.green:isWeak?'#DC2626':'#B45309' }}>{subAvg.toFixed(1)}</span>
-                          </div>
-                          <div style={{ height:'5px', background:P.slateLight, borderRadius:'3px', overflow:'hidden' }}>
-                            <div style={{ height:'100%', width:Math.min(subAvg/20*100,100)+'%', background:isStrong?'#10B981':isWeak?'#DC2626':'#D97706', borderRadius:'3px' }} />
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })()}
-          </div>
-        )}
+      </div>
       <AccessibilityWidget />
     </div>
   )
