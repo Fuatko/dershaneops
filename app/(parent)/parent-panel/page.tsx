@@ -143,7 +143,7 @@ export default function ParentPanelPage() {
     <div style={{ minHeight:'100vh', background:'#F0F4F9', fontFamily:'-apple-system, BlinkMacSystemFont, sans-serif' }}>
 
       {/* Header */}
-      <div style={{ background:'#1B3A6B', padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', position:'sticky', top:0, zIndex:100 }}>
+      <header role="banner" style={{ background:'#1B3A6B', padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', position:'sticky', top:0, zIndex:100 }}>
         <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
           <div style={{ width:'32px', height:'32px', borderRadius:'8px', background:'rgba(255,255,255,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'16px' }}>👨‍👩‍👧</div>
           <div>
@@ -152,7 +152,7 @@ export default function ParentPanelPage() {
           </div>
         </div>
         <button onClick={signOut} style={{ background:'rgba(255,255,255,0.1)', border:'none', borderRadius:'8px', padding:'6px 10px', color:'#fff', fontSize:'12px', cursor:'pointer' }}>Çıkış</button>
-      </div>
+      </header>
 
       {/* Çocuk seçici */}
       {children.length > 1 && (
@@ -167,9 +167,10 @@ export default function ParentPanelPage() {
       )}
 
       {/* Alt Tab Bar */}
-      <div style={{ position:'fixed', bottom:0, left:0, right:0, background:'#fff', borderTop:'1px solid #E2EAF8', display:'flex', zIndex:100, paddingBottom:'env(safe-area-inset-bottom)', overflowX:'auto' }}>
+      <nav role="navigation" aria-label="Veli panel navigasyonu" style={{ position:'fixed', bottom:0, left:0, right:0, background:'#fff', borderTop:'1px solid #E2EAF8', display:'flex', zIndex:100, paddingBottom:'env(safe-area-inset-bottom)', overflowX:'auto' }}>
         {TABS.map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+            role="tab" aria-selected={activeTab===tab.id} aria-label={tab.label}
             style={{ flex:'0 0 auto', minWidth:'52px', padding:'8px 4px 10px', border:'none', background:'transparent', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:'2px' }}>
             <span style={{ fontSize:'18px' }}>{tab.icon}</span>
             <span style={{ fontSize:'9px', fontWeight:activeTab===tab.id?700:500, color:activeTab===tab.id?'#1B3A6B':'#9CA3AF' }}>{tab.label}</span>
@@ -178,7 +179,7 @@ export default function ParentPanelPage() {
         ))}
       </div>
 
-      <div style={{ padding:'16px 16px 80px' }}>
+      <main id="main-content" role="main" style={{ padding:'16px 16px 80px' }}>
 
         {!selected ? (
           <div style={{ background:'#fff', borderRadius:'14px', padding:'40px', textAlign:'center', border:'1px solid #E2EAF8' }}>
@@ -534,7 +535,7 @@ export default function ParentPanelPage() {
 
           </>
         )}
-      </div>
+      </main>
 
       <AccessibilityWidget />
     </div>
