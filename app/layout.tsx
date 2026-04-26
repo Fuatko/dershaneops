@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import GlobalA11y from "@/components/GlobalA11y";
 import localFont from "next/font/local";
 import "./globals.css";
 
@@ -71,6 +72,7 @@ export default function RootLayout({
         />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <GlobalA11y />
         {children}
       </body>
     </html>
