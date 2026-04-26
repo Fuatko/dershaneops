@@ -94,7 +94,7 @@ export default function TenantsPage() {
 
     // Once tum kullanicilari sil (auth.users dahil)
     const { data: users } = await supabase.from('profiles').select('user_id').eq('tenant_id', id)
-    for (const u of  {
+    for (const u of users ?? []) {
       if (u.user_id) {
         await fetch('/api/admin/delete-user', {
           method: 'POST',
