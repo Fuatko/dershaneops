@@ -89,9 +89,22 @@ export default function TenantsPage() {
   }
 
   async function handleDelete(id: string, name: string) {
-    if (!confirm(`"${name}" kurumunu silmek istediğinizden emin misiniz?\n\nBu işlem geri alınamaz! Tüm kullanıcı profilleri de silinecek.`)) return
+    if (!confirm(`"${name}" kurumunu silmek istediğinizden emin misiniz?\n\nBu işlem geri alınamaz! Tüm kullanıcılar ve veriler silinecek.`)) return
     setDeleting(true)
-    await supabase.from('profiles').delete().eq('tenant_id', id)
+
+    // Once tum kullanicilari sil (auth.users dahil)
+    const { data: users } = await supabase.from('profiles').select('user_id').eq('tenant_id', id)
+    for (const u of  {
+      if (u.user_id) {
+        await fetch('/api/admin/delete-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: u.user_id })
+        })
+      }
+    }
+
+    // Sonra tenant'i sil
     await supabase.from('tenants').delete().eq('id', id)
     setSelected(null); setTenantUsers([])
     setDeleting(false); load()
@@ -259,6 +272,17 @@ export default function TenantsPage() {
                     <span style={{ fontSize:'10px', fontWeight:700, padding:'2px 7px', borderRadius:'8px', background:roleBg, color:roleColor }}>
                       {roleLabel}
                     </span>
+                  <button onClick={async () => {
+                      if (!confirm((u.full_name || u.email) + ' silinsin mi?')) return
+                      await fetch('/api/admin/delete-user', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ user_id: u.user_id })
+                      })
+                      await loadTenantUsers(selected.id)
+                    }} style={{ padding:'4px 10px', borderRadius:'6px', border:'none', background:'#FEF2F2', color:'#DC2626', fontSize:'11px', fontWeight:600, cursor:'pointer', flexShrink:0 }}>
+                    Sil
+                  </button>
                   </div>
                 )
               })}
