@@ -498,7 +498,7 @@ export default function StudentPanelPage() {
       {streak && (
         <div style={{ background:'#fff', padding:'8px 16px', display:'flex', alignItems:'center', gap:'10px', borderBottom:'1px solid #F0F4F9' }}>
           <div style={{ flex:1, height:'6px', background:'#F0F4F9', borderRadius:'3px', overflow:'hidden' }}>
-            <div style={{ height:'100%', width:dailyScore+'%', background:dailyScore>=75?'#2E7D52':dailyScore>=50?'#B45309':'#1B3A6B', borderRadius:'3px', transition:'width 0.5s' }} />
+            <div style={{ height:'100%', width:dailyScore+'%', role:'progressbar' as any, 'aria-valuenow':dailyScore, 'aria-valuemin':0, 'aria-valuemax':100, 'aria-label':'Gunluk skor: ' + dailyScore, background:dailyScore>=75?'#2E7D52':dailyScore>=50?'#B45309':'#1B3A6B', borderRadius:'3px', transition:'width 0.5s' }} />
           </div>
           <span style={{ fontSize:'11px', fontWeight:700, color:'#1B3A6B' }}>{dailyScore}/100</span>
           <span style={{ fontSize:'13px' }}>{feedback.emoji}</span>

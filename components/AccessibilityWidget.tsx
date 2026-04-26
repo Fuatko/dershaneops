@@ -27,6 +27,12 @@ function applyFont(sz: FontSz) {
   root.style.fontSize = map[sz]
 }
 
+// Screen reader duyuru fonksiyonu
+export function announceToScreenReader(message: string) {
+  const el = document.getElementById('sr-announcer')
+  if (el) { el.textContent = ''; setTimeout(() => { el.textContent = message }, 100) }
+}
+
 export default function AccessibilityWidget() {
   const [open, setOpen] = useState(false)
   const [theme, setTheme]    = useState<Theme>('default')
@@ -130,6 +136,9 @@ export default function AccessibilityWidget() {
 
   return (
     <>
+      {/* Screen reader live region */}
+      <div id="sr-announcer" aria-live="polite" aria-atomic="true" 
+        style={{ position:'absolute', width:'1px', height:'1px', padding:0, margin:'-1px', overflow:'hidden', clip:'rect(0,0,0,0)', whiteSpace:'nowrap', border:0 }} />
       {/* Global CSS — yüksek kontrast temalar */}
       <style>{`
         [data-a11y="high-contrast"] {
