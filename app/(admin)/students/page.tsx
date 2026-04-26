@@ -36,13 +36,32 @@ export default function StudentsPage() {
   }
 
   async function deleteStudent(id: string, name: string) {
-    if (!confirm(`"${name}" öğrencisini silmek istediğinizden emin misiniz?`)) return
+    if (!confirm(`"${name}" ogrencisini silmek istediginizden emin misiniz?`)) return
     setDeleting(id)
+    // Iliskili verileri sil
+    await supabase.from('student_badges').delete().eq('student_id', id)
+    await supabase.from('student_streaks').delete().eq('student_id', id)
     await supabase.from('student_topic_performance').delete().eq('student_id', id)
     await supabase.from('student_question_attempts').delete().eq('student_id', id)
+    await supabase.from('study_calendar').delete().eq('student_id', id)
+    await supabase.from('student_goals').delete().eq('student_id', id)
+    await supabase.from('early_alerts').delete().eq('student_id', id)
+    await supabase.from('exam_results').delete().eq('student_id', id)
+    await supabase.from('parent_students').delete().eq('student_id', id)
     await supabase.from('homework_assignments').delete().eq('student_id', id)
+    await supabase.from('calendar_notes').delete().eq('student_id', id)
+    await supabase.from('attendance').delete().eq('student_id', id)
     await supabase.from('lessons').delete().eq('student_id', id)
+    // Profile'dan user_id al ve auth.users'dan sil
+    const { data: prof } = await supabase.from('profiles').select('user_id').eq('id', id).single()
     await supabase.from('profiles').delete().eq('id', id)
+    if (prof?.user_id) {
+      await fetch('/api/admin/delete-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: prof.user_id })
+      })
+    }
     await load()
     setDeleting(null)
   }
