@@ -119,7 +119,7 @@ export default function NewStudentPage() {
               {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           ) : (
-            <input value={form.school_id} onChange={e => setForm(p => ({ ...p, school_id:e.target.value }))} placeholder="Okul adi yazin..." style={inp} />
+            <div style={{ padding:"10px 12px", borderRadius:"8px", border:"1px solid #FDE68A", background:"#FEF3C7", fontSize:"12.5px", color:"#92400E" }}>Once <a href="/schools" style={{ color:"#1B3A6B", fontWeight:600 }}>Okul Yonetimi</a> sayfasindan okul ekleyin.</div>
           )}
         </div>
 
