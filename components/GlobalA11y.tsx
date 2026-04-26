@@ -33,11 +33,12 @@ export default function GlobalA11y() {
 
     const styleEl = document.createElement('style')
     styleEl.id = 'a11y-global-styles'
-    styleEl.textContent = [
+    const css = [
       '*:focus-visible { outline: 3px solid #1B3A6B !important; outline-offset: 2px !important; }',
       '[data-a11y="high-contrast"] *:focus-visible { outline: 3px solid #ffff00 !important; }',
       '@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }',
-    ].join('\n')
+    ]
+    styleEl.textContent = css.join('\n')
 
     if (!document.getElementById('a11y-global-styles')) {
       document.head.appendChild(styleEl)
@@ -62,7 +63,7 @@ export default function GlobalA11y() {
   }, [])
 
   return (
-    <>
+    <div>
       <div
         id="sr-announcer"
         role="status"
@@ -76,9 +77,9 @@ export default function GlobalA11y() {
         onFocus={e => { (e.target as HTMLElement).style.top = '0' }}
         onBlur={e => { (e.target as HTMLElement).style.top = '-50px' }}
       >
-        Ana İçeriğe Geç
+        Ana Iceriye Gec
       </a>
-    </>
+    </div>
   )
 }
 
