@@ -26,17 +26,24 @@ export async function POST(req: NextRequest) {
 
   try {
     if (type === 'coach') {
-      const { student_name, overall_rate, streak, weak_topics, strong_topics, pending_homework, daily_score, user_message } = body
+      const { student_name, overall_rate, streak, weak_topics, strong_topics, pending_homework, daily_score, user_message,
+              last_exam_net, exam_trend, days_to_exam, exam_type, grade_level, recent_wrong_subjects } = body
       const text = await callClaude(
-        `Sen DershaneOPS'un kişisel AI koçusun. Öğrencinin adını kullan, samimi ve motive edici ol. Emojiler kullanabilirsin. Türkçe yaz. Kısa ve etkili cevap ver (max 150 kelime).`,
-        `Öğrenci: ${student_name}
-Genel başarı: %${overall_rate}
-Streak: ${streak} gün
-Günlük skor: ${daily_score}/100
-Zayıf konular: ${weak_topics || 'Yok'}
-Güçlü konular: ${strong_topics || 'Yok'}
-Bekleyen ödev: ${pending_homework}
-Mesaj: "${user_message}"`
+        `Sen DershaneOPS'un kisisel AI kocusun. Ogrencinin adini kullan, samimi ve motive edici ol. Emojiler kullanabilirsin. Turkce yaz. Kisa ve etkili cevap ver (max 150 kelime). Her zaman ogrenciye ozgu, veriye dayali cevap ver. Genel laflar etme.`,
+        `Ogrenci: ${student_name} (${grade_level ? grade_level+'. sinif' : ''})
+Hedef sinav: ${exam_type || 'YKS'} ${days_to_exam ? '(' + days_to_exam + ' gun kaldi)' : ''}
+Son sinav neti: ${last_exam_net || 'bilinmiyor'}
+Sinav trendi: ${exam_trend || 'bilinmiyor'}
+Genel basari: %${overall_rate}
+Streak: ${streak} gun
+Gunluk skor: ${daily_score}/100
+Zayif konular: ${weak_topics || 'Yok'}
+Guclu konular: ${strong_topics || 'Yok'}
+Son yanlis yapilan dersler: ${recent_wrong_subjects || 'Yok'}
+Bekleyen odev: ${pending_homework}
+Ogrenci mesaji: "${user_message}"
+
+Yukaridaki verilere gore kisisel, somut ve motive edici bir yanit ver.`
       )
       return NextResponse.json({ response: text })
     }
@@ -53,15 +60,22 @@ Kısa risk değerlendirmesi ve 3 somut öneri yaz.`
     }
 
     if (type === 'studyplan') {
-      const { student_name, weak_topics, medium_topics, strong_topics } = body
+      const { student_name, weak_topics, medium_topics, strong_topics, exam_type, days_to_exam, last_exam_net, exam_trend } = body
+      const urgency = days_to_exam < 30 ? 'ACIL - sinava az kaldi, zayif konulara odaklan' : days_to_exam < 90 ? 'ORTA - dengeli calis' : 'NORMAL - kapsamli calis'
       const text = await callClaude(
-        `Sen DershaneOPS çalışma planı yapay zekasısın. Sadece JSON döndür, başka hiçbir şey yazma.
-Format: [{"day":1,"subject":"...","topic":"...","task_type":"weak_area","description":"...","question_count":20,"duration_minutes":45,"difficulty":"medium","priority":"high"}]`,
-        `Öğrenci: ${student_name}
-Zayıf: ${JSON.stringify(weak_topics)}
-Orta: ${JSON.stringify(medium_topics)}
-Güçlü: ${JSON.stringify(strong_topics)}
-7 günlük plan oluştur. Her gün 2-3 görev.`
+        `Sen DershaneOPS calisma plani yapay zekasisin. Sadece JSON dondur, baska hicbir sey yazma.
+Format: [{"day":1,"subject":"...","topic":"...","task_type":"weak_area","description":"...","question_count":20,"duration_minutes":45,"difficulty":"medium","priority":"high"}]
+task_type: weak_area, review, new_topic, exam_practice
+priority: high, medium, low`,
+        `Ogrenci: ${student_name}
+Hedef sinav: ${exam_type || 'YKS'} - ${days_to_exam || '?'} gun kaldi
+Son sinav neti: ${last_exam_net || 'bilinmiyor'}
+Sinav trendi: ${exam_trend || 'stabil'}
+Strateji: ${urgency}
+Zayif konular: ${JSON.stringify(weak_topics)}
+Orta konular: ${JSON.stringify(medium_topics)}
+Guclu konular: ${JSON.stringify(strong_topics)}
+7 gunluk, her gun 2-3 gorev, sinav stratejisine uygun plan olustur.`
       )
       try {
         const plan = JSON.parse(text.replace(/```json|```/g, '').trim())
