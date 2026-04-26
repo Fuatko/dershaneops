@@ -506,9 +506,9 @@ export default function StudentPanelPage() {
       )}
 
       {/* Alt Tab Bar */}
-      <div style={{ position:'fixed', bottom:0, left:0, right:0, background:'#fff', borderTop:'1px solid #E2EAF8', display:'flex', zIndex:100, paddingBottom:'env(safe-area-inset-bottom)' }}>
+      <nav aria-label="Ana navigasyon" style={{ position:'fixed', bottom:0, left:0, right:0, background:'#fff', borderTop:'1px solid #E2EAF8', display:'flex', zIndex:100, paddingBottom:'env(safe-area-inset-bottom)' }}>
         {TABS.map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ flex:1, padding:'8px 4px 10px', border:'none', background:'transparent', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:'2px' }}>
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} aria-label={tab.label} aria-selected={activeTab===tab.id} role="tab" style={{ flex:1, padding:'8px 4px 10px', border:'none', background:'transparent', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:'2px' }}>
             <span style={{ fontSize:'18px' }}>{tab.icon}</span>
             <span style={{ fontSize:'9px', fontWeight:activeTab===tab.id?700:500, color:activeTab===tab.id?'#1B3A6B':'#9CA3AF' }}>{tab.label}</span>
             {activeTab===tab.id && <div style={{ width:'4px', height:'4px', borderRadius:'50%', background:'#1B3A6B' }} />}
