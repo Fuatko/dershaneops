@@ -84,7 +84,7 @@ export async function POST(req: Request) {
       tenant_id,
       grade_level: grade_level ? parseInt(grade_level) : null,
       classroom_id: finalClassroomId,
-      school_id: school_id || null,
+      school_id: school_id && school_id.match(/^[0-9a-f-]{36}$/) ? school_id : null,
     })
 
     if (profileError) {
