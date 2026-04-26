@@ -23,10 +23,18 @@ export default function ParentsPage() {
   }
 
   async function deleteParent(id: string, name: string) {
-    if (!confirm(`"${name}" velisini silmek istediğinizden emin misiniz?`)) return
+    if (!confirm(`"${name}" velisini silmek istediginizden emin misiniz?`)) return
     setDeleting(id)
     await supabase.from('parent_students').delete().eq('parent_id', id)
+    const { data: prof } = await supabase.from('profiles').select('user_id').eq('id', id).single()
     await supabase.from('profiles').delete().eq('id', id)
+    if (prof?.user_id) {
+      await fetch('/api/admin/delete-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({ user_id: prof.user_id })
+      })
+    }
     await load()
     setDeleting(null)
   }

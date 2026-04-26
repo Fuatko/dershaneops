@@ -23,10 +23,21 @@ export default function TeachersPage() {
   }
 
   async function deleteTeacher(id: string, name: string) {
-    if (!confirm(`"${name}" öğretmenini silmek istediğinizden emin misiniz?`)) return
+    if (!confirm(`"${name}" ogretmenini silmek istediginizden emin misiniz?`)) return
     setDeleting(id)
     await supabase.from('teachers').delete().eq('profile_id', id)
+    await supabase.from('lessons').delete().eq('teacher_id', id)
+    await supabase.from('calendar_notes').delete().eq('teacher_id', id)
+    await supabase.from('homework_assignments').delete().eq('assigned_by', id)
+    const { data: prof } = await supabase.from('profiles').select('user_id').eq('id', id).single()
     await supabase.from('profiles').delete().eq('id', id)
+    if (prof?.user_id) {
+      await fetch('/api/admin/delete-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: prof.user_id })
+      })
+    }
     await load()
     setDeleting(null)
   }
