@@ -24,37 +24,39 @@ export async function POST(req: NextRequest) {
   }
 
   if (pid) {
-    const tables = [
-      { table: 'student_badges', col: 'student_id' },
-      { table: 'student_streaks', col: 'student_id' },
-      { table: 'student_topic_performance', col: 'student_id' },
-      { table: 'student_question_attempts', col: 'student_id' },
-      { table: 'study_calendar', col: 'student_id' },
-      { table: 'student_goals', col: 'student_id' },
-      { table: 'early_alerts', col: 'student_id' },
-      { table: 'exam_results', col: 'student_id' },
-      { table: 'parent_students', col: 'student_id' },
-      { table: 'parent_students', col: 'parent_id' },
-      { table: 'homework_assignments', col: 'student_id' },
-      { table: 'homework_assignments', col: 'assigned_by' },
-      { table: 'calendar_notes', col: 'student_id' },
-      { table: 'calendar_notes', col: 'teacher_id' },
-      { table: 'attendance', col: 'student_id' },
-      { table: 'lessons', col: 'student_id' },
-      { table: 'lessons', col: 'teacher_id' },
-      { table: 'teachers', col: 'profile_id' },
-    ]
-    for (const { table, col } of tables) {
-      try {
-        await admin.from(table).delete().eq(col, pid)
-      } catch (e) {
-        // Tablo yoksa devam et
-      }
+    // Lessons'a bagli attendance'lari once sil
+    const { data: lessons } = await admin.from('lessons').select('id').or('student_id.eq.' + pid + ',teacher_id.eq.' + pid)
+    for (const lesson of lessons ?? []) {
+      await admin.from('attendance').delete().eq('lesson_id', lesson.id)
     }
+
+    // Sira ile tum iliskili verileri sil
+    await admin.from('classroom_students').delete().eq('student_id', pid)
+    await admin.from('attendance').delete().eq('student_id', pid)
+    await admin.from('lessons').delete().or('student_id.eq.' + pid + ',teacher_id.eq.' + pid)
+    await admin.from('study_plan_items').delete().in('study_plan_id',
+      (await admin.from('study_plans').select('id').eq('student_id', pid)).data?.map((x: any) => x.id) ?? []
+    )
+    await admin.from('study_plans').delete().eq('student_id', pid)
+    await admin.from('student_badges').delete().eq('student_id', pid)
+    await admin.from('student_streaks').delete().eq('student_id', pid)
+    await admin.from('student_topic_performance').delete().eq('student_id', pid)
+    await admin.from('student_question_attempts').delete().eq('student_id', pid)
+    await admin.from('student_answers').delete().in('assignment_id',
+      (await admin.from('homework_assignments').select('id').eq('student_id', pid)).data?.map((x: any) => x.id) ?? []
+    )
+    await admin.from('homework_assignments').delete().eq('student_id', pid)
+    await admin.from('homework_assignments').delete().eq('assigned_by', pid)
+    await admin.from('study_calendar').delete().eq('student_id', pid)
+    await admin.from('student_goals').delete().eq('student_id', pid)
+    await admin.from('early_alerts').delete().eq('student_id', pid)
+    await admin.from('exam_results').delete().eq('student_id', pid)
+    await admin.from('parent_students').delete().or('student_id.eq.' + pid + ',parent_id.eq.' + pid)
+    await admin.from('calendar_notes').delete().or('student_id.eq.' + pid + ',teacher_id.eq.' + pid)
+    await admin.from('teachers').delete().eq('profile_id', pid)
     await admin.from('profiles').delete().eq('id', pid)
   }
 
-  // auth.users sil - user_id yoksa da success don
   if (uid) {
     const { error } = await admin.auth.admin.deleteUser(uid)
     if (error && !error.message.includes('not found')) {
