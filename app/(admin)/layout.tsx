@@ -80,6 +80,7 @@ const navGroups = [
     { href: '/guidance',       label: 'Rehberlik',            icon: 'message' },
     { href: '/reports',        label: 'Raporlar ve Export',   icon: 'download' },
     { href: '/notifications',  label: 'Bildirimler',          icon: 'bell' },
+    { href: '/early-alerts',   label: 'Erken Uyari',          icon: 'alert' },
   ]},
   { section: 'Sistem', links: [
     { href: '/accessibility', label: 'Erişilebilirlik', icon: 'accessibility' },
