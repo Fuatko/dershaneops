@@ -17,11 +17,22 @@ export default function BookAssignPage() {
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(true)
+
+  // Tenant ID'yi otomatik al
+  const [currentTenantId, setCurrentTenantId] = useState<string>('')
   const supabase = createClient()
 
   useEffect(() => { load() }, [])
 
   async function load() {
+
+    // Tenant ID'yi yükle
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: prof } = await supabase.from('profiles').select('tenant_id').eq('user_id', user.id).single()
+      if (prof?.tenant_id) setCurrentTenantId(prof.tenant_id)
+    }
+
     const { data: b } = await supabase.from('books').select('*, chapters(*, tests(*))').eq('id', bookId).single()
     const { data: s } = await supabase.from('profiles').select('id, full_name').eq('role', 'student').order('full_name')
     setBook(b); setChapters(b?.chapters??[]); setStudents(s??[]); setLoading(false)
@@ -40,7 +51,7 @@ export default function BookAssignPage() {
   async function handleAssign() {
     if (!selectedStudent||selectedTests.length===0) { alert('Öğrenci ve en az bir test seçin!'); return }
     setSaving(true); setSuccess(false)
-    const inserts = selectedTests.map(testId => ({ student_id:selectedStudent, test_id:testId, deadline:deadline||null, status:'pending', tenant_id:'61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f' }))
+    const inserts = selectedTests.map(testId => ({ student_id:selectedStudent, test_id:testId, deadline:deadline||null, status:'pending', tenant_id: currentTenantId }))
     const { error } = await supabase.from('homework_assignments').insert(inserts)
     if (error) { alert('Hata: '+error.message); setSaving(false); return }
     setSuccess(true); setSelectedTests([]); setSelectedStudent(''); setDeadline(''); setSaving(false)

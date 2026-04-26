@@ -22,11 +22,22 @@ export default function GoalsPage() {
     target_exam: '', target_score: '', current_score: '',
     target_date: '', notes: '',
   })
+
+  // Tenant ID'yi otomatik al
+  const [currentTenantId, setCurrentTenantId] = useState<string>('')
   const supabase = createClient()
 
   useEffect(() => { load() }, [])
 
   async function load() {
+
+    // Tenant ID'yi yükle
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: prof } = await supabase.from('profiles').select('tenant_id').eq('user_id', user.id).single()
+      if (prof?.tenant_id) setCurrentTenantId(prof.tenant_id)
+    }
+
     const { data: s } = await supabase.from('profiles').select('id, full_name, grade_level, classroom_id').eq('role', 'student').order('grade_level')
     const { data: classrooms } = await supabase.from('classrooms').select('id, name')
     const classMap: Record<string,string> = {}
@@ -49,7 +60,7 @@ export default function GoalsPage() {
     if (!selected || !form.target_exam || !form.target_score) { alert('Hedef sınav ve puan zorunludur!'); return }
     setSaving(true); setSuccess('')
     await supabase.from('student_goals').insert({
-      tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
+      tenant_id: currentTenantId,
       student_id: selected.id,
       target_exam: form.target_exam,
       target_score: parseFloat(form.target_score),

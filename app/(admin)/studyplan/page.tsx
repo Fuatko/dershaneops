@@ -22,11 +22,22 @@ export default function StudyPlanPage() {
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  // Tenant ID'yi otomatik al
+  const [currentTenantId, setCurrentTenantId] = useState<string>('')
   const supabase = createClient()
 
   useEffect(() => { load() }, [])
 
   async function load() {
+
+    // Tenant ID'yi yükle
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: prof } = await supabase.from('profiles').select('tenant_id').eq('user_id', user.id).single()
+      if (prof?.tenant_id) setCurrentTenantId(prof.tenant_id)
+    }
+
     const { data: s } = await supabase.from('profiles').select('id, full_name').eq('role', 'student').order('full_name')
     const { data: sub } = await supabase.from('subjects').select('*').order('name')
     setStudents(s??[]); setSubjects(sub??[]); setLoading(false)
@@ -58,7 +69,7 @@ export default function StudyPlanPage() {
     setSaving(true)
     const weekStart = new Date(); weekStart.setDate(weekStart.getDate()-weekStart.getDay()+1)
     const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate()+6)
-    const { data: newPlan } = await supabase.from('study_plans').insert({ tenant_id:'61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f', student_id:selected.id, week_start_date:weekStart.toISOString().slice(0,10), week_end_date:weekEnd.toISOString().slice(0,10), generated_by:'ai', status:'active' }).select().single()
+    const { data: newPlan } = await supabase.from('study_plans').insert({ tenant_id: currentTenantId, student_id:selected.id, week_start_date:weekStart.toISOString().slice(0,10), week_end_date:weekEnd.toISOString().slice(0,10), generated_by:'ai', status:'active' }).select().single()
     if (newPlan) {
       const items = plan.map((item:any) => ({ study_plan_id:newPlan.id, day_of_week:item.day, subject_id:subjects.find(s=>s.name===item.subject)?.id, task_type:item.task_type, task_description:item.description, question_count:item.question_count, target_duration_minutes:item.duration_minutes, difficulty_level:item.difficulty, priority_level:item.priority, status:'pending' }))
       await supabase.from('study_plan_items').insert(items)

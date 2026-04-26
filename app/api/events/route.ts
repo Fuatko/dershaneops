@@ -2,6 +2,11 @@ import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
 export async function POST(req: Request) {
+  const supabaseServer = createClient()
+  const { data: { user } } = await supabaseServer.auth.getUser()
+  const { data: prof } = await supabaseServer.from('profiles').select('tenant_id').eq('user_id', user?.id ?? '').single()
+  const tenantId = prof?.tenant_id ?? null
+
   try {
     const { student_id, event_type, event_data } = await req.json()
     const supabase = createClient()
@@ -16,7 +21,7 @@ export async function POST(req: Request) {
     // Event tipine göre aksiyon
     if (event_type === 'risk_detected') {
       await supabase.from('notifications').insert({
-        tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
+        tenant_id: tenantId,
         target_type: 'admin',
         target_id: student_id,
         channel: 'in_app',
@@ -28,7 +33,7 @@ export async function POST(req: Request) {
 
     if (event_type === 'high_performance') {
       await supabase.from('notifications').insert({
-        tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
+        tenant_id: tenantId,
         target_type: 'admin',
         target_id: student_id,
         channel: 'in_app',
@@ -40,7 +45,7 @@ export async function POST(req: Request) {
 
     if (event_type === 'task_completed') {
       await supabase.from('notifications').insert({
-        tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
+        tenant_id: tenantId,
         target_type: 'admin',
         target_id: student_id,
         channel: 'in_app',
@@ -62,7 +67,7 @@ export async function GET() {
     const { data } = await supabase
       .from('notifications')
       .select('*')
-      .eq('tenant_id', '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f')
+      .eq('tenant_id', tenantId)
       .order('created_at', { ascending: false })
       .limit(50)
     return NextResponse.json({ ok: true, notifications: data ?? [] })

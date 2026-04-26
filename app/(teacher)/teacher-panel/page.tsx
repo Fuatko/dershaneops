@@ -172,14 +172,14 @@ const [hwFilterStatus, setHwFilterStatus] = useState('all')
   async function saveNote(e: React.FormEvent) {
     e.preventDefault(); if (!calendarStudent || !noteForm.note) return
     setSavingNote(true); setNoteSuccess(false)
-    await supabase.from('calendar_notes').upsert({ tenant_id:'61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f', student_id:calendarStudent.id, teacher_id:profile.id, calendar_date:selectedCalDate, note:noteForm.note, evaluation:noteForm.evaluation }, { onConflict:'student_id,teacher_id,calendar_date' })
+    await supabase.from('calendar_notes').upsert({ tenant_id: profile?.tenant_id, student_id:calendarStudent.id, teacher_id:profile.id, calendar_date:selectedCalDate, note:noteForm.note, evaluation:noteForm.evaluation }, { onConflict:'student_id,teacher_id,calendar_date' })
     await loadStudentCalendar(calendarStudent.id); setNoteSuccess(true); setNoteForm({ note:'', evaluation:'good' }); setSavingNote(false)
   }
   async function saveCalItem(e: React.FormEvent) {
     e.preventDefault(); if (!calendarStudent || !newCalItem.title) return
     setSavingCalItem(true)
     const d = new Date(newCalItem.calendar_date + 'T12:00:00')
-    await supabase.from('study_calendar').insert({ tenant_id:'61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f', student_id:calendarStudent.id, subject_id:newCalItem.subject_id||null, topic_id:newCalItem.topic_id||null, calendar_date:newCalItem.calendar_date, day_of_week:d.getDay()===0?7:d.getDay(), title:newCalItem.title, duration_minutes:newCalItem.duration_minutes, question_count:newCalItem.question_count, created_by:profile.id })
+    await supabase.from('study_calendar').insert({ tenant_id: profile?.tenant_id, student_id:calendarStudent.id, subject_id:newCalItem.subject_id||null, topic_id:newCalItem.topic_id||null, calendar_date:newCalItem.calendar_date, day_of_week:d.getDay()===0?7:d.getDay(), title:newCalItem.title, duration_minutes:newCalItem.duration_minutes, question_count:newCalItem.question_count, created_by:profile.id })
     await loadStudentCalendar(calendarStudent.id)
     setNewCalItem({ title:'', subject_id:'', topic_id:'', calendar_date:selectedCalDate, duration_minutes:45, question_count:0 })
     setShowAddForm(false); setSavingCalItem(false)
@@ -201,7 +201,7 @@ const [hwFilterStatus, setHwFilterStatus] = useState('all')
   async function handleAssign() {
     if (!selectedAssignStudent || selectedTests.length===0) { alert('Öğrenci ve test seçin!'); return }
     setAssigning(true); setAssignSuccess(false)
-    const inserts = selectedTests.map(testId => ({ student_id:selectedAssignStudent, test_id:testId, deadline:assignDeadline||null, status:'pending', tenant_id:'61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f' }))
+    const inserts = selectedTests.map(testId => ({ student_id:selectedAssignStudent, test_id:testId, deadline:assignDeadline||null, status:'pending', tenant_id: profile?.tenant_id }))
     const { error } = await supabase.from('homework_assignments').insert(inserts)
     if (error) { alert('Hata: '+error.message); setAssigning(false); return }
     setAssignSuccess(true); setSelectedTests([]); setSelectedAssignStudent(''); setAssignDeadline('')
@@ -211,14 +211,14 @@ const [hwFilterStatus, setHwFilterStatus] = useState('all')
     e.preventDefault(); if (!form.student_id||!form.subject_id) { alert('Öğrenci ve ders seçin!'); return }
     setSaving(true); setSuccess(false)
     const total = form.correct_count+form.wrong_count+form.blank_count
-    await supabase.from('student_question_attempts').insert({ tenant_id:'61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f', student_id:form.student_id, teacher_id:profile.id, subject_id:form.subject_id, topic_id:form.topic_id||null, attempt_date:form.attempt_date, total_questions:total, correct_count:form.correct_count, wrong_count:form.wrong_count, blank_count:form.blank_count, difficulty_level:form.difficulty_level, source_type:'manual', notes:form.notes||null })
+    await supabase.from('student_question_attempts').insert({ tenant_id: profile?.tenant_id, student_id:form.student_id, teacher_id:profile.id, subject_id:form.subject_id, topic_id:form.topic_id||null, attempt_date:form.attempt_date, total_questions:total, correct_count:form.correct_count, wrong_count:form.wrong_count, blank_count:form.blank_count, difficulty_level:form.difficulty_level, source_type:'manual', notes:form.notes||null })
     const query = supabase.from('student_question_attempts').select('total_questions,correct_count,wrong_count,blank_count,attempt_date').eq('student_id',form.student_id).eq('subject_id',form.subject_id)
     const { data: attempts } = form.topic_id ? await query.eq('topic_id',form.topic_id) : await query
     if (attempts && attempts.length>0) {
       const tQ=attempts.reduce((s,a)=>s+a.total_questions,0), tC=attempts.reduce((s,a)=>s+a.correct_count,0)
       const tW=attempts.reduce((s,a)=>s+a.wrong_count,0), tB=attempts.reduce((s,a)=>s+a.blank_count,0)
       const acc = tQ>0 ? Math.round(tC/tQ*100*100)/100 : 0
-      await supabase.from('student_topic_performance').upsert({ tenant_id:'61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f', student_id:form.student_id, subject_id:form.subject_id, topic_id:form.topic_id||null, total_questions:tQ, correct_count:tC, wrong_count:tW, blank_count:tB, accuracy_rate:acc, mastery_score:Math.round((acc*0.70+Math.min(attempts.length,10)*3.0)*100)/100, last_attempt_date:attempts[0].attempt_date, attempt_count:attempts.length, trend_direction:'stable', updated_at:new Date().toISOString() }, { onConflict:'student_id,subject_id,topic_id' })
+      await supabase.from('student_topic_performance').upsert({ tenant_id: profile?.tenant_id, student_id:form.student_id, subject_id:form.subject_id, topic_id:form.topic_id||null, total_questions:tQ, correct_count:tC, wrong_count:tW, blank_count:tB, accuracy_rate:acc, mastery_score:Math.round((acc*0.70+Math.min(attempts.length,10)*3.0)*100)/100, last_attempt_date:attempts[0].attempt_date, attempt_count:attempts.length, trend_direction:'stable', updated_at:new Date().toISOString() }, { onConflict:'student_id,subject_id,topic_id' })
     }
     setSuccess(true); setForm(p => ({ ...p, correct_count:0, wrong_count:0, blank_count:0, notes:'', topic_id:'' }))
     await load(); setSaving(false)

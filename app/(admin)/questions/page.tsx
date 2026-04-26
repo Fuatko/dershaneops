@@ -21,11 +21,22 @@ export default function QuestionsPage() {
     option_a: '', option_b: '', option_c: '', option_d: '',
     correct_answer: 'A', difficulty: 'medium',
   })
+
+  // Tenant ID'yi otomatik al
+  const [currentTenantId, setCurrentTenantId] = useState<string>('')
   const supabase = createClient()
 
   useEffect(() => { load() }, [])
 
   async function load() {
+
+    // Tenant ID'yi yükle
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: prof } = await supabase.from('profiles').select('tenant_id').eq('user_id', user.id).single()
+      if (prof?.tenant_id) setCurrentTenantId(prof.tenant_id)
+    }
+
     const [{ data: q }, { data: sub }, { data: att }, { data: st }] = await Promise.all([
       supabase.from('verification_questions').select('*, subjects(name)').order('created_at', { ascending: false }),
       supabase.from('subjects').select('*').order('name'),
@@ -78,7 +89,7 @@ export default function QuestionsPage() {
       option_d: form.option_d || null,
       correct_answer: form.correct_answer,
       difficulty: form.difficulty,
-      tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
+      tenant_id: currentTenantId,
     }
     if (editItem) {
       await supabase.from('verification_questions').update(payload).eq('id', editItem.id)

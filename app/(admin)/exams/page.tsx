@@ -25,11 +25,22 @@ export default function ExamsPage() {
     results: { subject_id: string; correct: number; wrong: number; blank: number }[]
   }>({ student_id: '', results: [] })
 
+
+  // Tenant ID'yi otomatik al
+  const [currentTenantId, setCurrentTenantId] = useState<string>('')
   const supabase = createClient()
 
   useEffect(() => { load() }, [])
 
   async function load() {
+
+    // Tenant ID'yi yükle
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: prof } = await supabase.from('profiles').select('tenant_id').eq('user_id', user.id).single()
+      if (prof?.tenant_id) setCurrentTenantId(prof.tenant_id)
+    }
+
     const [{ data: e }, { data: s }, { data: st }] = await Promise.all([
       supabase.from('exams').select('*, exam_subjects(*, subjects(name))').order('exam_date', { ascending: false }),
       supabase.from('subjects').select('*').order('name'),
@@ -71,7 +82,7 @@ export default function ExamsPage() {
     if (!newExam.name || examSubjects.length === 0) { alert('Sınav adı ve en az bir ders seçin!'); return }
     setSaving(true)
     const { data: exam, error } = await supabase.from('exams').insert({
-      tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
+      tenant_id: currentTenantId,
       ...newExam,
     }).select().single()
     if (error || !exam) { alert('Hata: ' + error?.message); setSaving(false); return }
@@ -101,7 +112,7 @@ export default function ExamsPage() {
       const subjectTotal = selectedExam.exam_subjects?.find((es: any) => es.subject_id === r.subject_id)?.question_count ?? 40
       const score = Math.round((net / subjectTotal) * 100 * 100) / 100
       await supabase.from('exam_results').upsert({
-        tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
+        tenant_id: currentTenantId,
         exam_id: selectedExam.id,
         student_id: resultForm.student_id,
         subject_id: r.subject_id,
@@ -113,7 +124,7 @@ export default function ExamsPage() {
 
       // Konu performansını güncelle
       await supabase.from('student_question_attempts').insert({
-        tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
+        tenant_id: currentTenantId,
         student_id: resultForm.student_id,
         subject_id: r.subject_id,
         attempt_date: selectedExam.exam_date,

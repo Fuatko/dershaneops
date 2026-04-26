@@ -24,6 +24,9 @@ export default function OutcomesPage() {
     subject_id: '', topic_id: '', code: '', description: '',
     grade_level: 10, difficulty_level: 'medium', order_no: 0
   })
+
+  // Tenant ID'yi otomatik al
+  const [currentTenantId, setCurrentTenantId] = useState<string>('')
   const supabase = createClient()
 
   useEffect(() => { load() }, [])
@@ -31,6 +34,14 @@ export default function OutcomesPage() {
   useEffect(() => { if (selectedSubject) loadOutcomes(selectedSubject) }, [selectedSubject])
 
   async function load() {
+
+    // Tenant ID'yi yükle
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: prof } = await supabase.from('profiles').select('tenant_id').eq('user_id', user.id).single()
+      if (prof?.tenant_id) setCurrentTenantId(prof.tenant_id)
+    }
+
     const [{ data: s }, { data: c }, { data: st }] = await Promise.all([
       supabase.from('subjects').select('*').order('name'),
       supabase.from('classrooms').select('*').order('grade_level'),
@@ -61,7 +72,7 @@ export default function OutcomesPage() {
     setSaving(true)
     setSuccess(false)
     await supabase.from('learning_outcomes').insert({
-      tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
+      tenant_id: currentTenantId,
       subject_id: form.subject_id,
       topic_id: form.topic_id || null,
       code: form.code || null,
@@ -85,7 +96,7 @@ export default function OutcomesPage() {
   async function addClass() {
     const name = newClass.grade + '-' + newClass.branch
     const { error } = await supabase.from('classrooms').insert({
-      tenant_id: '61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f',
+      tenant_id: currentTenantId,
       name, grade_level: newClass.grade, branch: newClass.branch, academic_year: newClass.year
     })
     if (error) { alert('Hata: ' + error.message); return }

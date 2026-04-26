@@ -21,11 +21,22 @@ export default function GuidancePage() {
   const [activeTab, setActiveTab] = useState('risk')
   const [attendanceForm, setAttendanceForm] = useState({ lesson_id:'', status:'absent', notes:'' })
   const [savingAttendance, setSavingAttendance] = useState(false)
+
+  // Tenant ID'yi otomatik al
+  const [currentTenantId, setCurrentTenantId] = useState<string>('')
   const supabase = createClient()
 
   useEffect(() => { load() }, [])
 
   async function load() {
+
+    // Tenant ID'yi yükle
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: prof } = await supabase.from('profiles').select('tenant_id').eq('user_id', user.id).single()
+      if (prof?.tenant_id) setCurrentTenantId(prof.tenant_id)
+    }
+
     const { data: s } = await supabase.from('profiles').select('id, full_name, created_at').eq('role', 'student').order('full_name')
     setStudents(s??[])
     const riskList = []
@@ -60,7 +71,7 @@ export default function GuidancePage() {
   async function saveAttendance(e: React.FormEvent) {
     e.preventDefault(); if (!selected||!attendanceForm.lesson_id) { alert('Ders seçin!'); return }
     setSavingAttendance(true)
-    const { error } = await supabase.from('attendance').upsert({ tenant_id:'61cb6e2f-98d6-4fe7-a1c3-3afdfa7a728f', student_id:selected.id, lesson_id:attendanceForm.lesson_id, date:new Date().toISOString().slice(0,10), status:attendanceForm.status, notes:attendanceForm.notes||null }, { onConflict:'student_id,lesson_id' })
+    const { error } = await supabase.from('attendance').upsert({ tenant_id: currentTenantId, student_id:selected.id, lesson_id:attendanceForm.lesson_id, date:new Date().toISOString().slice(0,10), status:attendanceForm.status, notes:attendanceForm.notes||null }, { onConflict:'student_id,lesson_id' })
     if (error) { alert('Hata: '+error.message); setSavingAttendance(false); return }
     const { data: att } = await supabase.from('attendance').select('id, date, status, notes, lesson_id').eq('student_id', selected.id).order('date', { ascending:false })
     const enriched = []
