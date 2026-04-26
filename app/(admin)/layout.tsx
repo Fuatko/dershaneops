@@ -215,6 +215,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div style={{ display:'flex', height:'100vh', background:'#F8FAFC', overflow:'hidden' }}>
+      {/* Skip to main content */}
+      <a href="#main-content" style={{ position:'absolute', top:'-40px', left:0, background:'#1B3A6B', color:'#fff', padding:'8px 16px', borderRadius:'0 0 8px 0', fontSize:'13px', fontWeight:700, textDecoration:'none', zIndex:9999, transition:'top 0.2s' }}
+        onFocus={e => (e.target as HTMLElement).style.top = '0'}
+        onBlur={e => (e.target as HTMLElement).style.top = '-40px'}
+        aria-label="Ana icerige gec">
+        Ana Iceriye Gec
+      </a>
 
       {/* Desktop Sidebar */}
       <aside className="desk-sidebar" style={{ width:'220px', background:'#fff', borderRight:'1px solid #E8EEF5', flexShrink:0, overflow:'hidden' }} aria-label="Yönetim menüsü">

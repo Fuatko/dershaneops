@@ -139,7 +139,7 @@ export default function DashboardPage() {
       {/* Metrikler */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:'10px', marginBottom:'16px' }} className="metrics-grid">
         {metrics.map(m => (
-          <Link key={m.label} href={m.href} style={{ textDecoration:'none' }}>
+          <Link key={m.label} href={m.href} aria-label={m.label + ': ' + m.value} style={{ textDecoration:'none' }}>
             <div style={{ background:m.bg, borderRadius:'12px', padding:'14px 16px', border:'1px solid '+m.border, display:'flex', alignItems:'center', gap:'12px' }}>
               <div style={{ width:'40px', height:'40px', borderRadius:'10px', background:'rgba(255,255,255,0.7)', display:'flex', alignItems:'center', justifyContent:'center', color:m.color, flexShrink:0 }}>
                 <m.Icon />
@@ -182,6 +182,8 @@ export default function DashboardPage() {
               value={searchName}
               onChange={e => setSearchName(e.target.value)}
               placeholder="Ad soyad ara..."
+              aria-label="Ogrenci ara"
+              role="searchbox"
               style={{ border:'none', outline:'none', background:'transparent', fontSize:'12px', color:'#1B3A6B', width:'100%', fontFamily:'inherit' }}
             />
             {searchName && (
@@ -236,7 +238,7 @@ export default function DashboardPage() {
               {hasFilter ? 'Bu filtreye uygun öğrenci bulunamadı' : 'Henüz öğrenci yok'}
             </div>
           ) : (
-            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'12.5px' }}>
+            <table role="grid" aria-label="Ogrenci listesi" style={{ width:'100%', borderCollapse:'collapse', fontSize:'12.5px' }}>
               <thead>
                 <tr style={{ background:'#F8FAFC' }}>
                   {['Ad Soyad','Sınıf','Şube','Okul','Telefon'].map(h => (

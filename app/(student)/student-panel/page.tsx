@@ -475,7 +475,7 @@ export default function StudentPanelPage() {
       )}
 
       {/* Header */}
-      <div style={{ background:'#1B3A6B', padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', position:'sticky', top:0, zIndex:100 }}>
+      <header role="banner" style={{ background:'#1B3A6B', padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', position:'sticky', top:0, zIndex:100 }}>
         <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
           <div style={{ width:'32px', height:'32px', borderRadius:'8px', background:'rgba(255,255,255,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'16px', fontWeight:800, color:'#fff' }}>D</div>
           <div>
@@ -492,7 +492,7 @@ export default function StudentPanelPage() {
           )}
           <button onClick={signOut} style={{ background:'rgba(255,255,255,0.1)', border:'none', borderRadius:'8px', padding:'6px 10px', color:'#fff', fontSize:'12px', cursor:'pointer' }}>Çıkış</button>
         </div>
-      </div>
+      </header>
 
       {/* Skor bar */}
       {streak && (
@@ -506,17 +506,17 @@ export default function StudentPanelPage() {
       )}
 
       {/* Alt Tab Bar */}
-      <div style={{ position:'fixed', bottom:0, left:0, right:0, background:'#fff', borderTop:'1px solid #E2EAF8', display:'flex', zIndex:100, paddingBottom:'env(safe-area-inset-bottom)' }}>
+      <nav role="navigation" aria-label="Ana navigasyon" style={{ position:'fixed', bottom:0, left:0, right:0, background:'#fff', borderTop:'1px solid #E2EAF8', display:'flex', zIndex:100, paddingBottom:'env(safe-area-inset-bottom)' }}>
         {TABS.map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ flex:1, padding:'8px 4px 10px', border:'none', background:'transparent', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:'2px' }}>
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} aria-selected={activeTab===tab.id} role="tab" aria-label={tab.label} style={{ flex:1, padding:'8px 4px 10px', border:'none', background:'transparent', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:'2px' }}>
             <span style={{ fontSize:'18px' }}>{tab.icon}</span>
             <span style={{ fontSize:'9px', fontWeight:activeTab===tab.id?700:500, color:activeTab===tab.id?'#1B3A6B':'#9CA3AF' }}>{tab.label}</span>
             {activeTab===tab.id && <div style={{ width:'4px', height:'4px', borderRadius:'50%', background:'#1B3A6B' }} />}
           </button>
         ))}
-      </div>
+      </nav>
 
-      <div style={{ padding:'16px 16px 80px' }}>
+      <main id="main-content" role="main" style={{ padding:'16px 16px 80px' }}>
 
         {/* ── BUGÜN ── */}
         {activeTab === 'today' && (
@@ -1325,6 +1325,7 @@ export default function StudentPanelPage() {
         )}
 
 </div>
+      </main>
       <AccessibilityWidget />
     </div>
   )

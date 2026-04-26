@@ -106,7 +106,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(160deg, #F0F4F9 0%, #EEF3FB 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
+    <div role="main" aria-label="Giris sayfasi" style={{ minHeight: '100vh', background: 'linear-gradient(160deg, #F0F4F9 0%, #EEF3FB 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
       <div style={{ width: '100%', maxWidth: '420px', padding: '0 20px' }}>
 
         {/* Logo */}
@@ -140,6 +140,9 @@ export default function LoginPage() {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   placeholder="ornek@email.com"
+                  aria-label="E-posta adresi"
+                  aria-required="true"
+                  autoComplete="email"
                   style={{ width: '100%', padding: '11px 14px', borderRadius: '9px', border: '1.5px solid #D5DFF0', fontSize: '13.5px', color: '#1B3A6B', outline: 'none', boxSizing: 'border-box' }}
                 />
               </div>
@@ -151,6 +154,9 @@ export default function LoginPage() {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="Şifrenizi girin"
+                  aria-label="Sifre"
+                  aria-required="true"
+                  autoComplete="current-password"
                   onKeyDown={e => e.key === 'Enter' && signInWithPassword()}
                   style={{ width: '100%', padding: '11px 14px', borderRadius: '9px', border: '1.5px solid #D5DFF0', fontSize: '13.5px', color: '#1B3A6B', outline: 'none', boxSizing: 'border-box' }}
                 />
@@ -219,6 +225,8 @@ export default function LoginPage() {
                   value={otp}
                   onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 8))}
                   placeholder="12345678"
+                  aria-label="Dogrulama kodu"
+                  aria-required="true"
                   maxLength={8}
                   onKeyDown={e => e.key === 'Enter' && verifyOtp()}
                   style={{ width: '100%', padding: '14px', borderRadius: '9px', border: '1.5px solid #D5DFF0', fontSize: '22px', fontWeight: 700, color: '#1B3A6B', outline: 'none', textAlign: 'center', letterSpacing: '8px', boxSizing: 'border-box' }}
