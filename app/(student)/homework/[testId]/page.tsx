@@ -43,7 +43,7 @@ export default function TestSolvePage({ params }: PageProps) {
 
         const ansMap: Record<number, string> = {}
         for (const ans of existingAnswers ?? []) {
-          ansMap[ans.question_no] = ans.given_answer
+          ansMap[ans.question_no] = ans.given_answer?.trim()
         }
         console.log('DEBUG answer_keys:', a.tests?.answer_keys)
         console.log('DEBUG ansMap:', ansMap)
@@ -96,7 +96,7 @@ export default function TestSolvePage({ params }: PageProps) {
       await supabase.from('student_answers').upsert({
         assignment_id: params.testId,
         question_no: parseInt(qNo),
-        given_answer: ans,
+        given_answer: ans.trim(),
       }, { onConflict: 'assignment_id,question_no' })
     }
 
