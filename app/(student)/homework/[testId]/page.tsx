@@ -10,6 +10,7 @@ interface PageProps { params: { testId: string } }
 
 export default function TestSolvePage({ params }: PageProps) {
   const [assignment, setAssignment] = useState<any>(null)
+  const [answerKeys, setAnswerKeys] = useState<any[]>([])
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [submitted, setSubmitted] = useState(false)
   const [results, setResults] = useState<any>(null)
@@ -22,18 +23,19 @@ export default function TestSolvePage({ params }: PageProps) {
     async function load() {
       const { data: a } = await supabase
         .from('homework_assignments')
-        .select(`
-          *,
-          tests (
-            id, name, question_count,
-            chapters ( name, books ( id, name, subject, color, tenant_id ) ),
-            answer_keys ( question_no, correct_answer )
-          )
-        `)
+        .select('*, tests(id, name, question_count, chapters(name, books(id, name, subject, color, tenant_id)))')
         .eq('id', params.testId)
         .single()
 
       if (!a) { router.push('/homework'); return }
+
+      // Cevap anahtarini ayri cek
+      const { data: keys } = await supabase
+        .from('answer_keys')
+        .select('question_no, correct_answer')
+        .eq('test_id', a.tests?.id)
+
+      setAnswerKeys(keys ?? [])
 
       if (a.status === 'completed') {
         const { data: existingAnswers } = await supabase
@@ -43,13 +45,11 @@ export default function TestSolvePage({ params }: PageProps) {
 
         const ansMap: Record<number, string> = {}
         for (const ans of existingAnswers ?? []) {
-          ansMap[ans.question_no] = ans.given_answer?.trim()
+          ansMap[ans.question_no] = ans.given_answer?.trim() ?? ''
         }
-        console.log('DEBUG answer_keys:', a.tests?.answer_keys)
-        console.log('DEBUG ansMap:', ansMap)
         setAnswers(ansMap)
         setSubmitted(true)
-        calcResults(a, ansMap)
+        calcResults(a.tests?.question_count ?? 0, keys ?? [], ansMap)
       }
 
       setAssignment(a)
@@ -58,18 +58,17 @@ export default function TestSolvePage({ params }: PageProps) {
     load()
   }, [params.testId])
 
-  function calcResults(a: any, ans: Record<number, string>) {
-    const keys = a.tests?.answer_keys ?? []
+  function calcResults(questionCount: number, keys: any[], ans: Record<number, string>) {
     let correct = 0, wrong = 0, bk = 0, empty = 0
-    for (let i = 1; i <= a.tests?.question_count; i++) {
+    for (let i = 1; i <= questionCount; i++) {
       const given = ans[i]
-      const key = keys.find((k: any) => k.question_no === i)?.correct_answer
+      const key = keys.find((k: any) => k.question_no === i)?.correct_answer?.trim()
       if (!given) { empty++; continue }
       if (given === 'BK') { bk++; continue }
-      if (key && given === key) correct++
+      if (key && given.trim() === key) correct++
       else wrong++
     }
-    setResults({ correct, wrong, bk, empty, total: a.tests?.question_count ?? 0 })
+    setResults({ correct, wrong, bk, empty, total: questionCount })
   }
 
   function selectAnswer(q: number, opt: string) {
@@ -100,88 +99,10 @@ export default function TestSolvePage({ params }: PageProps) {
       }, { onConflict: 'assignment_id,question_no' })
     }
 
-    await supabase
-      .from('homework_assignments')
-      .update({ status: 'completed' })
-      .eq('id', params.testId)
+    await supabase.from('homework_assignments').update({ status: 'completed' }).eq('id', params.testId)
 
-      // Konu performansını güncelle
-try {
-  const bookSubject = test?.chapters?.books?.subject
-  if (bookSubject) {
-    const { data: subjectData } = await supabase
-      .from('subjects')
-      .select('id')
-      .ilike('name', '%' + bookSubject + '%')
-      .maybeSingle()
-
-    const correct = Object.entries(answers).filter(([q, ans]) => {
-      const key = keys.find((k: any) => k.question_no === parseInt(q))?.correct_answer
-      return key && ans === key
-    }).length
-    const wrong = Object.entries(answers).filter(([q, ans]) => {
-      const key = keys.find((k: any) => k.question_no === parseInt(q))?.correct_answer
-      return key && ans !== key && ans !== 'BK'
-    }).length
-    const blank = Object.values(answers).filter(ans => ans === 'BK').length
-    const totalQ = test?.question_count ?? 0
-
-    await supabase.from('student_question_attempts').insert({
-      tenant_id: assignment.tests?.chapters?.books?.tenant_id ?? null,
-      student_id: assignment.student_id,
-      subject_id: subjectData?.id ?? null,
-      attempt_date: new Date().toISOString().slice(0, 10),
-      total_questions: totalQ,
-      correct_count: correct,
-      wrong_count: wrong,
-      blank_count: blank,
-      difficulty_level: 'medium',
-      source_type: 'homework',
-    })
-
-    if (subjectData?.id) {
-      const { data: existing } = await supabase
-        .from('student_topic_performance')
-        .select('id, accuracy_rate')
-        .eq('student_id', assignment.student_id)
-        .eq('subject_id', subjectData.id)
-        .is('topic_id', null)
-        .single()
-
-      const acc = totalQ > 0 ? Math.round(correct / totalQ * 100 * 100) / 100 : 0
-      const mastery = Math.round((acc * 0.70 + 3.0) * 100) / 100
-      const trend = existing ? (acc > existing.accuracy_rate ? 'up' : acc < existing.accuracy_rate ? 'down' : 'stable') : 'stable'
-
-      await supabase.from('student_topic_performance').upsert({
-        tenant_id: assignment.tests?.chapters?.books?.tenant_id ?? null,
-        student_id: assignment.student_id,
-        subject_id: subjectData.id,
-        topic_id: null,
-        total_questions: totalQ,
-        correct_count: correct,
-        wrong_count: wrong,
-        blank_count: blank,
-        accuracy_rate: acc,
-        mastery_score: mastery,
-        last_attempt_date: new Date().toISOString().slice(0, 10),
-        attempt_count: 1,
-        trend_direction: trend,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'student_id,subject_id,topic_id' })
-    }
-  }
-} catch (err) {
-  console.error('Performans güncelleme hatası:', err)
-}
-    // Assignment'i answer_keys ile yeniden cek
-    const { data: updatedAssignment } = await supabase
-      .from('homework_assignments')
-      .select(`*, tests(id, name, question_count, chapters(name, books(id, name, subject, color, tenant_id)), answer_keys(question_no, correct_answer))`)
-      .eq('id', params.testId)
-      .single()
-    setAssignment(updatedAssignment)
     setSubmitted(true)
-    calcResults(updatedAssignment ?? assignment, answers)
+    calcResults(total, answerKeys, answers)
     setLoading(false)
   }
 
@@ -189,7 +110,6 @@ try {
   if (!assignment) return null
 
   const test = assignment.tests
-  const keys = test?.answer_keys ?? []
   const total = test?.question_count ?? 0
   const answered = Object.keys(answers).length
   const pct = Math.round(answered / total * 100)
@@ -198,16 +118,14 @@ try {
   return (
     <div style={{ padding: '24px', maxWidth: '780px' }}>
 
-      {/* Header */}
       <div style={{ marginBottom: '20px' }}>
         <a href="/homework" style={{ fontSize: '12px', color: '#7A8FA8', textDecoration: 'none' }}>← Ödevlerim</a>
         <h1 style={{ fontSize: '17px', fontWeight: 700, color: '#1B3A6B', margin: '6px 0 2px' }}>
           {test?.name} — {test?.chapters?.name}
         </h1>
-        <p style={{ fontSize: '12px', color: '#7A8FA8', margin: 0 }}>{test?.chapters?.books?.name} • {test?.chapters?.books?.subject}</p>
+        <p style={{ fontSize: '12px', color: '#7A8FA8', margin: 0 }}>{test?.chapters?.books?.name}</p>
       </div>
 
-      {/* Tamamlandı Banner */}
       {submitted && results && (
         <div style={{ background: '#EAF4EE', border: '1px solid #A7D9B8', borderRadius: '12px', padding: '18px', marginBottom: '20px', textAlign: 'center' }}>
           <div style={{ fontSize: '15px', fontWeight: 700, color: '#2E7D52', marginBottom: '12px' }}>Ödev Tamamlandı!</div>
@@ -216,7 +134,7 @@ try {
               { label: 'Doğru', value: results.correct, color: '#2E7D52', bg: '#C6E8D0' },
               { label: 'Yanlış', value: results.wrong, color: '#C0392B', bg: '#FECACA' },
               { label: 'BK', value: results.bk, color: '#B45309', bg: '#FED7AA' },
-              { label: 'Puan', value: `%${Math.round(results.correct / results.total * 100)}`, color: '#1B3A6B', bg: '#BFDBFE' },
+              { label: 'Puan', value: `%${results.total > 0 ? Math.round(results.correct / results.total * 100) : 0}`, color: '#1B3A6B', bg: '#BFDBFE' },
             ].map(m => (
               <div key={m.label} style={{ textAlign: 'center' }}>
                 <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: m.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 700, color: m.color, margin: '0 auto 4px' }}>{m.value}</div>
@@ -224,13 +142,9 @@ try {
               </div>
             ))}
           </div>
-          <a href="/swot" style={{ display: 'inline-block', marginTop: '12px', padding: '7px 16px', borderRadius: '8px', background: '#F0ECFB', color: '#6B4FC8', fontSize: '12px', fontWeight: 600, textDecoration: 'none', border: '1px solid #C4B5FD' }}>
-            SWOT Analizimi Gör →
-          </a>
         </div>
       )}
 
-      {/* İlerleme */}
       {!submitted && (
         <div style={{ background: '#fff', borderRadius: '10px', border: '1px solid #D5DFF0', padding: '14px 16px', marginBottom: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#4A6080', marginBottom: '8px' }}>
@@ -246,14 +160,13 @@ try {
         </div>
       )}
 
-      {/* Sorular */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
         {Array.from({ length: total }, (_, i) => {
           const q = i + 1
           const given = answers[q]
-          const key = keys.find((k: any) => k.question_no === q)?.correct_answer
-          const isCorrect = submitted && key && given === key
-          const isWrong = submitted && given && given !== 'BK' && given !== key
+          const key = answerKeys.find((k: any) => k.question_no === q)?.correct_answer?.trim()
+          const isCorrect = submitted && key && given?.trim() === key
+          const isWrong = submitted && given && given !== 'BK' && given?.trim() !== key
           const isBK = given === 'BK'
 
           return (
@@ -266,22 +179,15 @@ try {
                   {OPTIONS.map(opt => {
                     const isSelected = given === opt
                     const isAnswer = submitted && key === opt && opt !== 'BK'
-                    let bg = '#F5F8FF'
-                    let color = '#4A6080'
-                    let border = '#D5DFF0'
+                    let bg = '#F5F8FF', color = '#4A6080', border = '#D5DFF0'
                     if (isSelected && !submitted) { bg = '#1B3A6B'; color = '#fff'; border = '#1B3A6B' }
                     if (isSelected && submitted && isCorrect) { bg = '#2E7D52'; color = '#fff'; border = '#2E7D52' }
                     if (isSelected && submitted && isWrong) { bg = '#C0392B'; color = '#fff'; border = '#C0392B' }
                     if (isSelected && submitted && isBK) { bg = '#B45309'; color = '#fff'; border = '#B45309' }
                     if (isAnswer && !isSelected) { bg = '#EAF4EE'; color = '#2E7D52'; border = '#2E7D52' }
-
                     return (
-                      <button
-                        key={opt}
-                        onClick={() => selectAnswer(q, opt)}
-                        disabled={submitted}
-                        style={{ width: opt === 'BK' ? '40px' : '34px', height: '34px', borderRadius: '7px', border: `1.5px solid ${border}`, background: bg, color, fontSize: opt === 'BK' ? '9px' : '12px', fontWeight: 700, cursor: submitted ? 'default' : 'pointer', transition: 'all .1s' }}
-                      >
+                      <button key={opt} onClick={() => selectAnswer(q, opt)} disabled={submitted}
+                        style={{ width: opt === 'BK' ? '40px' : '34px', height: '34px', borderRadius: '7px', border: `1.5px solid ${border}`, background: bg, color, fontSize: opt === 'BK' ? '9px' : '12px', fontWeight: 700, cursor: submitted ? 'default' : 'pointer' }}>
                         {opt}
                       </button>
                     )
@@ -298,7 +204,6 @@ try {
         })}
       </div>
 
-      {/* Submit */}
       {!submitted && (
         <div>
           {submitError && (
@@ -306,11 +211,8 @@ try {
               ⚠️ {submitError}
             </div>
           )}
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            style={{ width: '100%', padding: '12px', borderRadius: '10px', background: '#1B3A6B', color: '#fff', fontSize: '14px', fontWeight: 700, border: 'none', cursor: 'pointer' }}
-          >
+          <button onClick={handleSubmit} disabled={loading}
+            style={{ width: '100%', padding: '12px', borderRadius: '10px', background: '#1B3A6B', color: '#fff', fontSize: '14px', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
             {loading ? 'Kaydediliyor...' : 'Ödevi Tamamla'}
           </button>
         </div>
