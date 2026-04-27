@@ -113,8 +113,7 @@ try {
       .from('subjects')
       .select('id')
       .ilike('name', '%' + bookSubject + '%')
-      .limit(1)
-      .single()
+      .maybeSingle()
 
     const correct = Object.entries(answers).filter(([q, ans]) => {
       const key = keys.find((k: any) => k.question_no === parseInt(q))?.correct_answer
