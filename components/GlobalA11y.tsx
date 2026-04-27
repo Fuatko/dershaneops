@@ -1,8 +1,10 @@
 'use client'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 export default function GlobalA11y() {
+  const [mounted, setMounted] = useState(false)
   useEffect(() => {
+    setMounted(true)
     function enhanceButtons() {
       document.querySelectorAll('button:not([aria-label])').forEach(btn => {
         const text = btn.textContent?.trim()
@@ -38,8 +40,9 @@ export default function GlobalA11y() {
     return () => { clearTimeout(timer); observer.disconnect() }
   }, [])
 
+  if (!mounted) return null
   return (
-    <div style={{ display: 'contents' }}>
+    <div>
       <div id="sr-announcer" role="status" aria-live="polite" aria-atomic="true"
         style={{ position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px', overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }} />
       <a href="#main-content"
