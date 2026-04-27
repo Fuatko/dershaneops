@@ -79,7 +79,7 @@ export default function ExamsPage() {
   }
 
   async function createExam() {
-    if (!newExam.name || examSubjects.length === 0) { alert('Sınav adı ve en az bir ders seçin!'); return }
+    if (!newExam.name) { alert('Sinav adi gerekli!'); return }
     setSaving(true)
     const { data: exam, error } = await supabase.from('exams').insert({
       tenant_id: currentTenantId,
@@ -271,14 +271,14 @@ export default function ExamsPage() {
 
             <div style={{ marginBottom: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                <label style={{ ...lbl, margin: 0 }}>Dersler *</label>
+                <label style={{ ...lbl, margin: 0 }}>Dersler (Opsiyonel)</label>
                 <button onClick={addSubjectToExam} style={{ padding: '5px 12px', borderRadius: '7px', background: '#EEF3FB', color: '#1B3A6B', fontSize: '12px', fontWeight: 600, border: 'none', cursor: 'pointer' }}>
                   + Ders Ekle
                 </button>
               </div>
               {examSubjects.length === 0 ? (
                 <div style={{ padding: '16px', background: '#F8FAFF', borderRadius: '8px', border: '1px dashed #D5DFF0', textAlign: 'center', fontSize: '12.5px', color: '#7A8FA8' }}>
-                  Ders eklemek için yukarıdaki butonu kullanın
+                  Sinav sonuclarini girerken ders bazli analiz icin ders ekleyebilirsiniz
                 </div>
               ) : examSubjects.map((es, i) => (
                 <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 120px auto', gap: '8px', marginBottom: '8px', alignItems: 'center' }}>
