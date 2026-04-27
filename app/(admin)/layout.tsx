@@ -47,6 +47,8 @@ const navGroups = [
   ]},
   { section: 'Tanımlar', links: [
     { href: '/students',     label: 'Öğrenciler',        icon: 'students' },
+    { href: '/schools',      label: 'Okullar',            icon: 'building' },
+    { href: '/subjects',     label: 'Dersler',            icon: 'books' },
     { href: '/teachers',     label: 'Öğretmenler',       icon: 'teachers' },
     { href: '/parents',      label: 'Veliler',           icon: 'parents' },
     { href: '/parent-match', label: 'Veli Eşleştirme',   icon: 'link' },
