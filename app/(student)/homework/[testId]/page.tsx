@@ -173,8 +173,15 @@ try {
 } catch (err) {
   console.error('Performans güncelleme hatası:', err)
 }
+    // Assignment'i answer_keys ile yeniden cek
+    const { data: updatedAssignment } = await supabase
+      .from('homework_assignments')
+      .select(`*, tests(id, name, question_count, chapters(name, books(id, name, subject, color, tenant_id)), answer_keys(question_no, correct_answer))`)
+      .eq('id', params.testId)
+      .single()
+    setAssignment(updatedAssignment)
     setSubmitted(true)
-    calcResults(assignment, answers)
+    calcResults(updatedAssignment ?? assignment, answers)
     setLoading(false)
   }
 
