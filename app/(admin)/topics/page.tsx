@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 export default function TopicsPage() {
+  const [mounted, setMounted] = useState(false)
   const [subjects, setSubjects] = useState<any[]>([])
   const [topics, setTopics] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -13,10 +14,15 @@ export default function TopicsPage() {
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState<string|null>(null)
   const [tenantId, setTenantId] = useState('')
-  const [form, setForm] = useState({ name: '', order_no: 1 })
+  const [name, setName] = useState('')
+  const [orderNo, setOrderNo] = useState(1)
+  const [error, setError] = useState('')
   const supabase = createClient()
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    setMounted(true)
+    load()
+  }, [])
 
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -32,35 +38,40 @@ export default function TopicsPage() {
   async function selectSubject(s: any) {
     setSelectedSubject(s)
     setShowForm(false)
+    setError('')
     const { data } = await supabase.from('topics').select('*').eq('subject_id', s.id).order('order_no')
     setTopics(data ?? [])
-    setForm({ name: '', order_no: (data?.length ?? 0) + 1 })
+    setOrderNo((data?.length ?? 0) + 1)
   }
 
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault()
-    if (!form.name.trim() || !selectedSubject) return
+  async function handleSave() {
+    if (!name.trim() || !selectedSubject) return
     setSaving(true)
-    await supabase.from('topics').insert({
-      name: form.name.trim(),
+    setError('')
+    const { error: err } = await supabase.from('topics').insert({
+      name: name.trim(),
       subject_id: selectedSubject.id,
-      order_no: form.order_no,
+      order_no: orderNo,
     })
-    setForm({ name: '', order_no: form.order_no + 1 })
-    setShowForm(false)
-    await selectSubject(selectedSubject)
+    if (err) {
+      setError(err.message)
+    } else {
+      setName('')
+      setShowForm(false)
+      await selectSubject(selectedSubject)
+    }
     setSaving(false)
   }
 
-  async function handleDelete(id: string, name: string) {
-    if (!confirm('"' + name + '" konusunu silmek istiyor musunuz?')) return
+  async function handleDelete(id: string, n: string) {
+    if (!confirm('"' + n + '" silinsin mi?')) return
     setDeleting(id)
     await supabase.from('topics').delete().eq('id', id)
     await selectSubject(selectedSubject)
     setDeleting(null)
   }
 
-  if (loading) return <div style={{ padding:'40px', textAlign:'center', color:'#94A3B8' }}>Yukleniyor...</div>
+  if (!mounted || loading) return <div style={{ padding:'40px', textAlign:'center', color:'#94A3B8' }}>Yukleniyor...</div>
 
   return (
     <div style={{ padding:'24px 20px', maxWidth:'1000px', fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif' }}>
@@ -71,14 +82,13 @@ export default function TopicsPage() {
 
       {subjects.length === 0 ? (
         <div style={{ background:'#FEF3C7', border:'1px solid #FDE68A', borderRadius:'12px', padding:'24px', textAlign:'center' }}>
-          <div style={{ fontSize:'13px', color:'#92400E', fontWeight:600 }}>Once Dersler sayfasindan ders ekleyin</div>
-          <a href="/subjects" style={{ display:'inline-block', marginTop:'10px', padding:'7px 14px', borderRadius:'7px', background:'#1B3A6B', color:'#fff', fontSize:'12px', fontWeight:600, textDecoration:'none' }}>
+          <div style={{ fontSize:'13px', color:'#92400E', fontWeight:600, marginBottom:'10px' }}>Once Dersler sayfasindan ders ekleyin</div>
+          <a href="/subjects" style={{ padding:'7px 14px', borderRadius:'7px', background:'#1B3A6B', color:'#fff', fontSize:'12px', fontWeight:600, textDecoration:'none' }}>
             Ders Yonetimine Git
           </a>
         </div>
       ) : (
         <div style={{ display:'grid', gridTemplateColumns:'220px 1fr', gap:'16px' }}>
-          {/* Sol: Ders listesi */}
           <div style={{ background:'#fff', borderRadius:'12px', border:'1px solid #E2E8F0', overflow:'hidden', alignSelf:'start' }}>
             <div style={{ padding:'10px 14px', background:'#F8FAFC', borderBottom:'1px solid #E2E8F0', fontSize:'12px', fontWeight:700, color:'#475569' }}>
               Ders Sec
@@ -92,7 +102,6 @@ export default function TopicsPage() {
             ))}
           </div>
 
-          {/* Sag: Konu listesi */}
           <div>
             {!selectedSubject ? (
               <div style={{ background:'#F8FAFC', borderRadius:'12px', border:'1px solid #E2E8F0', padding:'48px', textAlign:'center' }}>
@@ -112,33 +121,39 @@ export default function TopicsPage() {
                   </button>
                 </div>
 
+                {error && (
+                  <div style={{ background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:'8px', padding:'10px 14px', marginBottom:'10px', fontSize:'12px', color:'#DC2626' }}>
+                    Hata: {error}
+                  </div>
+                )}
+
                 {showForm && (
-                  <form onSubmit={handleSave} style={{ background:'#fff', borderRadius:'10px', border:'1px solid #E2E8F0', padding:'14px', marginBottom:'12px', display:'flex', gap:'8px', alignItems:'flex-end' }}>
+                  <div style={{ background:'#fff', borderRadius:'10px', border:'1px solid #E2E8F0', padding:'14px', marginBottom:'12px', display:'flex', gap:'8px', alignItems:'flex-end' }}>
                     <div style={{ flex:1 }}>
-                      <label style={{ display:'block', fontSize:'11px', fontWeight:600, color:'#475569', marginBottom:'5px' }}>KONU ADI *</label>
-                      <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                        placeholder="Ornek: Karekok" required autoFocus
-                        style={{ width:'100%', padding:'9px 12px', borderRadius:'8px', border:'1px solid #E2E8F0', fontSize:'13px', color:'#1B3A6B', outline:'none', boxSizing:'border-box' }} />
+                      <label style={{ display:'block', fontSize:'11px', fontWeight:600, color:'#475569', marginBottom:'5px' }}>KONU ADI</label>
+                      <input value={name} onChange={e => setName(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleSave()}
+                        placeholder="Ornek: Karekok" autoFocus
+                        style={{ width:'100%', padding:'9px 12px', borderRadius:'8px', border:'1px solid #E2E8F0', fontSize:'13px', color:'#1B3A6B', outline:'none', boxSizing:'border-box' as any }} />
                     </div>
                     <div style={{ width:'80px' }}>
                       <label style={{ display:'block', fontSize:'11px', fontWeight:600, color:'#475569', marginBottom:'5px' }}>SIRA</label>
-                      <input type="number" value={form.order_no} onChange={e => setForm(p => ({ ...p, order_no: parseInt(e.target.value)||1 }))}
-                        style={{ width:'100%', padding:'9px 8px', borderRadius:'8px', border:'1px solid #E2E8F0', fontSize:'13px', color:'#1B3A6B', outline:'none', boxSizing:'border-box' }} />
+                      <input type="number" value={orderNo} onChange={e => setOrderNo(parseInt(e.target.value)||1)}
+                        style={{ width:'100%', padding:'9px 8px', borderRadius:'8px', border:'1px solid #E2E8F0', fontSize:'13px', color:'#1B3A6B', outline:'none', boxSizing:'border-box' as any }} />
                     </div>
-                    <button type="submit" disabled={saving}
-                      style={{ padding:'9px 16px', borderRadius:'8px', background:'#1B3A6B', color:'#fff', fontSize:'13px', fontWeight:600, border:'none', cursor:'pointer', whiteSpace:'nowrap' }}>
+                    <button onClick={handleSave} disabled={saving}
+                      style={{ padding:'9px 16px', borderRadius:'8px', background:'#1B3A6B', color:'#fff', fontSize:'13px', fontWeight:600, border:'none', cursor:'pointer' }}>
                       {saving ? '...' : 'Kaydet'}
                     </button>
-                    <button type="button" onClick={() => setShowForm(false)}
+                    <button onClick={() => { setShowForm(false); setError('') }}
                       style={{ padding:'9px 12px', borderRadius:'8px', background:'#F0F4F9', color:'#475569', fontSize:'13px', fontWeight:600, border:'none', cursor:'pointer' }}>
                       Iptal
                     </button>
-                  </form>
+                  </div>
                 )}
 
                 {topics.length === 0 ? (
                   <div style={{ background:'#fff', borderRadius:'12px', border:'1px solid #E2E8F0', padding:'32px', textAlign:'center' }}>
-                    <div style={{ fontSize:'24px', marginBottom:'8px' }}>📝</div>
                     <div style={{ fontSize:'13px', color:'#94A3B8' }}>Bu ders icin henuz konu eklenmemis</div>
                   </div>
                 ) : (
@@ -148,9 +163,9 @@ export default function TopicsPage() {
                         <div style={{ width:'24px', height:'24px', borderRadius:'6px', background:'#EEF3FB', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', fontWeight:700, color:'#1B3A6B', flexShrink:0 }}>
                           {t.order_no}
                         </div>
-                        <span style={{ flex:1, fontSize:'13px', color:'#1B3A6B', fontWeight:500 }}>{t.name}</span>
+                        <span style={{ flex:1, fontSize:'13px', color:'#1B3A6B' }}>{t.name}</span>
                         <button onClick={() => handleDelete(t.id, t.name)} disabled={deleting === t.id}
-                          style={{ padding:'4px 10px', borderRadius:'6px', border:'1px solid #FECACA', background:'#FEF2F2', color:'#DC2626', fontSize:'11px', fontWeight:600, cursor:'pointer', flexShrink:0 }}>
+                          style={{ padding:'4px 10px', borderRadius:'6px', border:'1px solid #FECACA', background:'#FEF2F2', color:'#DC2626', fontSize:'11px', fontWeight:600, cursor:'pointer' }}>
                           {deleting === t.id ? '...' : 'Sil'}
                         </button>
                       </div>
