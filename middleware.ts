@@ -82,7 +82,7 @@ export async function middleware(request: NextRequest) {
 
     // Admin sayfaları — sadece admin ve superadmin
     const adminPaths = [
-      '/dashboard', '/candidates', '/students', '/branches', '/branch-report', '/schools', '/subjects', '/topics', '/teachers', '/parents', '/parent-match',
+      '/dashboard', '/candidates', '/students', '/branches', '/branch-report', '/teachers', '/schools', '/subjects', '/topics', '/teachers', '/parents', '/parent-match',
       '/scheduler', '/conflicts', '/makeup',
       '/books', '/risk', '/coordinator', '/guidance', '/outcomes',
       '/reports', '/swot', '/exams', '/prediction', '/scenario',

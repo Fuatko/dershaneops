@@ -120,6 +120,7 @@ export default function StudentsPage() {
                     <span style={{ fontSize: '11.5px', fontWeight: 600, padding: '3px 10px', borderRadius: '20px', background: '#EAF4EE', color: '#2E7D52' }}>Aktif</span>
                   </td>
                   <td style={{ padding: '13px 16px' }}>
+                    <a href={'/students/' + s.id} style={{ padding:'6px 12px', borderRadius:'7px', border:'1px solid #BFDBFE', background:'#EFF6FF', color:'#1E40AF', fontSize:'12px', fontWeight:600, textDecoration:'none', marginRight:'6px' }}>Duzenle</a>
                     <button onClick={() => deleteStudent(s.id, s.full_name)} disabled={deleting === s.id} style={{ padding: '6px 12px', borderRadius: '7px', border: '1px solid #FECACA', background: '#FEF2F2', color: '#C0392B', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
                       {deleting === s.id ? '...' : 'Sil'}
                     </button>
