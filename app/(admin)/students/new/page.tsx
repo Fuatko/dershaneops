@@ -23,7 +23,8 @@ const GRADES = [
 const BRANCHES = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','R','S','T','U','V','Y','Z']
 
 export default function NewStudentPage() {
-  const [form, setForm] = useState({ full_name:'', email:'', phone:'', grade_level:'', branch:'', school_id:'' })
+  const [form, setForm] = useState({ full_name:'', email:'', phone:'', grade_level:'', branch:'', school_id:'', branch_id:'' })
+  const [branches, setBranches] = useState<any[]>([])
   const [schools, setSchools] = useState<any[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -35,6 +36,7 @@ export default function NewStudentPage() {
 
   useEffect(() => {
     supabase.from('schools').select('id, name').order('name').then(({ data }) => setSchools(data ?? []))
+    supabase.from('branches').select('id, name').order('name').then(({ data }) => setBranches(data ?? []))
   }, [])
 
   async function handleSubmit() {
@@ -49,7 +51,7 @@ export default function NewStudentPage() {
     const d = await res.json()
     if (!d.ok) { setError(d.error); setSaving(false); return }
     setSuccess(true)
-    setForm({ full_name:'', email:'', phone:'', grade_level:'', branch:'', school_id:'' })
+    setForm({ full_name:'', email:'', phone:'', grade_level:'', branch:'', school_id:'', branch_id:'' })
     setSaving(false)
   }
 
@@ -120,6 +122,20 @@ export default function NewStudentPage() {
             </select>
           ) : (
             <div style={{ padding:"10px 12px", borderRadius:"8px", border:"1px solid #FDE68A", background:"#FEF3C7", fontSize:"12.5px", color:"#92400E" }}>Once <a href="/schools" style={{ color:"#1B3A6B", fontWeight:600 }}>Okul Yonetimi</a> sayfasindan okul ekleyin.</div>
+          )}
+        </div>
+
+        <div style={{ marginBottom:'20px' }}>
+          <label style={lbl}>Sube</label>
+          {branches.length > 0 ? (
+            <select value={form.branch_id} onChange={e => setForm(p => ({ ...p, branch_id: e.target.value }))} style={inp}>
+              <option value="">Sube Secin (Opsiyonel)</option>
+              {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          ) : (
+            <div style={{ padding:'10px 12px', borderRadius:'8px', border:'1px solid #E2E8F0', background:'#F8FAFC', fontSize:'12px', color:'#94A3B8' }}>
+              Sube tanimlanmamis — <a href="/branches" style={{ color:'#1B3A6B', fontWeight:600 }}>Sube ekle</a>
+            </div>
           )}
         </div>
 

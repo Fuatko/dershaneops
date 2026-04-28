@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   try {
     const {
       email, full_name, phone, role,
-      grade_level, classroom_id, school_id,
+      grade_level, classroom_id, school_id, branch_id,
       branch
     } = await req.json()
 
@@ -85,6 +85,7 @@ export async function POST(req: Request) {
       grade_level: grade_level ? parseInt(grade_level) : null,
       classroom_id: finalClassroomId,
       school_id: school_id && school_id.match(/^[0-9a-f-]{36}$/) ? school_id : null,
+      branch_id: branch_id && branch_id.match(/^[0-9a-f-]{36}$/) ? branch_id : null,
     })
 
     if (profileError) {
