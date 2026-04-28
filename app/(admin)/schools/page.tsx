@@ -1,6 +1,5 @@
 'use client'
 export const dynamic = 'force-dynamic'
-
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -80,8 +79,8 @@ export default function SchoolsPage() {
 
   const inp = { width:'100%', padding:'9px 12px', borderRadius:'8px', border:'1px solid #E2E8F0', fontSize:'13px', color:'#1B3A6B', outline:'none', boxSizing:'border-box' as any }
   const lbl = { display:'block', fontSize:'11px', fontWeight:600 as any, color:'#475569', marginBottom:'5px' }
-  if (loading) return <div style={{ padding:'40px', textAlign:'center', color:'#94A3B8' }}>Yukleniyor...</div>
 
+  if (loading) return <div style={{ padding:'40px', textAlign:'center', color:'#94A3B8' }}>Yukleniyor...</div>
 
   return (
     <div style={{ padding:'24px 20px', maxWidth:'900px', fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif' }}>
@@ -144,7 +143,6 @@ export default function SchoolsPage() {
             const typeLabel = TYPES.find(t => t.value === school.type)?.label ?? school.type
             return (
               <div key={school.id} style={{ background:'#fff', borderRadius:'12px', border:'1px solid #E2E8F0', overflow:'hidden' }}>
-                {/* Kurum baslik */}
                 <div style={{ padding:'14px 16px', background:'#F8FAFC', borderBottom:'1px solid #E2E8F0', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                   <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
                     <div style={{ width:'36px', height:'36px', borderRadius:'8px', background:'#1B3A6B', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:'16px' }}>
@@ -160,14 +158,13 @@ export default function SchoolsPage() {
                       style={{ padding:'5px 12px', borderRadius:'6px', border:'1px solid #BFDBFE', background:'#EFF6FF', color:'#1E40AF', fontSize:'11px', fontWeight:600, cursor:'pointer' }}>
                       + Sube Ekle
                     </button>
-                    <button onCli=> handleDeleteSchool(school.id, school.name)} disabled={deleting===school.id}
+                    <button onClick={() => handleDeleteSchool(school.id, school.name)} disabled={deleting===school.id}
                       style={{ padding:'5px 12px', borderRadius:'6px', border:'1px solid #FECACA', background:'#FEF2F2', color:'#DC2626', fontSize:'11px', fontWeight:600, cursor:'pointer' }}>
                       {deleting===school.id ? '...' : 'Sil'}
                     </button>
                   </div>
                 </div>
 
-                {/* Sube ekleme formu */}
                 {showBranchForm === school.id && (
                   <form onSubmit={e => handleSaveBranch(e, school.id)} style={{ padding:'14px 16px', background:'#F0F7FF', borderBottom:'1px solid #E2E8F0' }}>
                     <div style={{ fontSize:'12px', fontWeight:700, color:'#1B3A6B', marginBottom:'10px' }}>Yeni Sube — {school.name}</div>
@@ -196,10 +193,9 @@ export default function SchoolsPage() {
                   </form>
                 )}
 
-                {/* Subeler */}
                 {schoolBranches.length === 0 ? (
                   <div style={{ padding:'16px', textAlign:'center', fontSize:'12px', color:'#94A3B8' }}>
-                    Bu kurumun henuz subesi yok — "Sube Ekle" butonuna tiklayin
+                    Bu kurumun henuz subesi yok
                   </div>
                 ) : (
                   <div>
@@ -209,8 +205,8 @@ export default function SchoolsPage() {
                         <div style={{ flex:1 }}>
                           <div style={{ fontSize:'13px', fontWeight:600, color:'#1B3A6B' }}>{b.name}</div>
                           <div style={{ fontSize:'11px', color:'#94A3B8' }}>
-                            {b.manager_name ? 'Mudur: '+b.manager_name+' ' : ''}
-                            {b.phone ? '· '+b.phone : ''}
+                            {b.manager_name ? 'Mudur: '+b.manager_name : ''}
+                            {b.phone ? ' · '+b.phone : ''}
                             {b.address ? ' · '+b.address : ''}
                           </div>
                         </div>
@@ -219,7 +215,7 @@ export default function SchoolsPage() {
                           Rapor
                         </a>
                         <button onClick={() => handleDeleteBranch(b.id, b.name)} disabled={deleting===b.id}
-                          style={{ padding:'4px 10px', borderRadius:'6px', border:'1px solid #FECACA', background:'#FEF2F2', color:'#DC2626', ze:'11px', fontWeight:600, cursor:'pointer' }}>
+                          style={{ padding:'4px 10px', borderRadius:'6px', border:'1px solid #FECACA', background:'#FEF2F2', color:'#DC2626', fontSize:'11px', fontWeight:600, cursor:'pointer' }}>
                           {deleting===b.id ? '...' : 'Sil'}
                         </button>
                       </div>
