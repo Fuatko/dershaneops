@@ -21,6 +21,8 @@ export default function SchoolsPage() {
   const [form, setForm] = useState({ name:'', address:'', phone:'', type:'dershane' })
   const [branchForm, setBranchForm] = useState({ name:'', address:'', phone:'', manager_name:'' })
   const [deleting, setDeleting] = useState<string|null>(null)
+  const [editingSchool, setEditingSchool] = useState<any>(null)
+  const [editingBranch, setEditingBranch] = useState<any>(null)
   const supabase = createClient()
 
   useEffect(() => { load() }, [])
@@ -60,6 +62,36 @@ export default function SchoolsPage() {
     setSaving(false)
   }
 
+  async function handleUpdateSchool(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingSchool) return
+    setSaving(true)
+    await supabase.from('schools').update({
+      name: editingSchool.name,
+      type: editingSchool.type,
+      phone: editingSchool.phone,
+      address: editingSchool.address,
+    }).eq('id', editingSchool.id)
+    setEditingSchool(null)
+    await load()
+    setSaving(false)
+  }
+
+  async function handleUpdateBranch(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingBranch) return
+    setSaving(true)
+    await supabase.from('branches').update({
+      name: editingBranch.name,
+      manager_name: editingBranch.manager_name,
+      phone: editingBranch.phone,
+      address: editingBranch.address,
+    }).eq('id', editingBranch.id)
+    setEditingBranch(null)
+    await load()
+    setSaving(false)
+  }
+
   async function handleDeleteSchool(id: string, name: string) {
     if (!confirm('"' + name + '" silinsin mi? Altindaki subeler de silinecek.')) return
     setDeleting(id)
@@ -81,6 +113,79 @@ export default function SchoolsPage() {
   const lbl = { display:'block', fontSize:'11px', fontWeight:600 as any, color:'#475569', marginBottom:'5px' }
 
   if (loading) return <div style={{ padding:'40px', textAlign:'center', color:'#94A3B8' }}>Yukleniyor...</div>
+
+
+  {/* Kurum Duzenleme Modali */}
+  {editingSchool && (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:'16px' }}>
+      <form onSubmit={handleUpdateSchool} style={{ background:'#fff', borderRadius:'14px', padding:'24px', maxWidth:'500px', width:'100%' }}>
+        <div style={{ fontSize:'15px', fontWeight:700, color:'#1B3A6B', marginBottom:'16px' }}>Kurum Duzenle</div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px', marginBottom:'14px' }}>
+          <div style={{ gridColumn:'1/-1' }}>
+            <label style={lbl}>KURUM ADI</label>
+            <input value={editingSchool.name} onChange={e => setEditingSchool((p:any)=>({...p,name:e.target.value}))} style={inp} required />
+          </div>
+          <div>
+            <label style={lbl}>KURUM TURU</label>
+            <select value={editingSchool.type} onChange={e => setEditingSchool((p:any)=>({...p,type:e.target.value}))} style={inp}>
+              {TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={lbl}>TELEFON</label>
+            <input value={editingSchool.phone??''} onChange={e => setEditingSchool((p:any)=>({...p,phone:e.target.value}))} style={inp} />
+          </div>
+          <div style={{ gridColumn:'1/-1' }}>
+            <label style={lbl}>ADRES</label>
+            <input value={editingSchool.address??''} onChange={e => setEditingSchool((p:any)=>({...p,address:e.target.value}))} style={inp} />
+          </div>
+        </div>
+        <div style={{ display:'flex', gap:'8px' }}>
+          <button type="submit" disabled={saving} style={{ flex:1, padding:'10px', borderRadius:'8px', background:'#1B3A6B', color:'#fff', fontSize:'13px', fontWeight:600, border:'none', cursor:'pointer' }}>
+            {saving ? 'Kaydediliyor...' : 'Kaydet'}
+          </button>
+          <button type="button" onClick={() => setEditingSchool(null)} style={{ padding:'10px 16px', borderRadius:'8px', background:'#F0F4F9', color:'#475569', fontSize:'13px', fontWeight:600, border:'none', cursor:'pointer' }}>
+            Iptal
+          </button>
+        </div>
+      </form>
+    </div>
+  )}
+
+  {/* Sube Duzenleme Modali */}
+  {editingBranch && (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:'16px' }}>
+      <form onSubmit={handleUpdateBranch} style={{ background:'#fff', borderRadius:'14px', padding:'24px', maxWidth:'500px', width:'100%' }}>
+        <div style={{ fontSize:'15px', fontWeight:700, color:'#1B3A6B', marginBottom:'16px' }}>Sube Duzenle</div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px', marginBottom:'14px' }}>
+          <div style={{ gridColumn:'1/-1' }}>
+            <label style={lbl}>SUBE ADI</label>
+            <input value={editingBranch.name} onChange={e => setEditingBranch((p:any)=>({...p,name:e.target.value}))} style={inp} required />
+          </div>
+          <div>
+            <label style={lbl}>MUDUR</label>
+            <input value={editingBranch.manager_name??''} onChange={e => setEditingBranch((p:any)=>({...p,manager_name:e.target.value}))} style={inp} />
+          </div>
+          <div>
+            <label style={lbl}>TELEFON</label>
+            <input value={editingBranch.phone??''} onChange={e => setEditingBranch((p:any)=>({...p,phone:e.target.value}))} style={inp} />
+          </div>
+          <div style={{ gridColumn:'1/-1' }}>
+            <label style={lbl}>ADRES</label>
+            <input value={editingBranch.address??''} onChange={e => setEditingBranch((p:any)=>({...p,address:e.target.value}))} style={inp} />
+          </div>
+        </div>
+        <div style={{ display:'flex', gap:'8px' }}>
+          <button type="submit" disabled={saving} style={{ flex:1, padding:'10px', borderRadius:'8px', background:'#1B3A6B', color:'#fff', fontSize:'13px', fontWeight:600, border:'none', cursor:'pointer' }}>
+            {saving ? 'Kaydediliyor...' : 'Kaydet'}
+          </button>
+          <button type="button" onClick={() => setEditingBranch(null)} style={{ padding:'10px 16px', borderRadius:'8px', background:'#F0F4F9', color:'#475569', fontSize:'13px', fontWeight:600, border:'none', cursor:'pointer' }}>
+            Iptal
+          </button>
+        </div>
+      </form>
+    </div>
+  )}
 
   return (
     <div style={{ padding:'24px 20px', maxWidth:'900px', fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif' }}>
@@ -158,6 +263,10 @@ export default function SchoolsPage() {
                       style={{ padding:'5px 12px', borderRadius:'6px', border:'1px solid #BFDBFE', background:'#EFF6FF', color:'#1E40AF', fontSize:'11px', fontWeight:600, cursor:'pointer' }}>
                       + Sube Ekle
                     </button>
+                    <button onClick={() => setEditingSchool({...school})}
+                      style={{ padding:'5px 12px', borderRadius:'6px', border:'1px solid #D5DFF0', background:'#F8FAFC', color:'#1B3A6B', fontSize:'11px', fontWeight:600, cursor:'pointer' }}>
+                      Duzenle
+                    </button>
                     <button onClick={() => handleDeleteSchool(school.id, school.name)} disabled={deleting===school.id}
                       style={{ padding:'5px 12px', borderRadius:'6px', border:'1px solid #FECACA', background:'#FEF2F2', color:'#DC2626', fontSize:'11px', fontWeight:600, cursor:'pointer' }}>
                       {deleting===school.id ? '...' : 'Sil'}
@@ -214,6 +323,10 @@ export default function SchoolsPage() {
                           style={{ padding:'4px 10px', borderRadius:'6px', border:'1px solid #D5DFF0', background:'#F8FAFC', color:'#1B3A6B', fontSize:'11px', fontWeight:600, textDecoration:'none' }}>
                           Rapor
                         </a>
+                        <button onClick={() => setEditingBranch({...b})}
+                          style={{ padding:'4px 10px', borderRadius:'6px', border:'1px solid #D5DFF0', background:'#F8FAFC', color:'#1B3A6B', fontSize:'11px', fontWeight:600, cursor:'pointer' }}>
+                          Duzenle
+                        </button>
                         <button onClick={() => handleDeleteBranch(b.id, b.name)} disabled={deleting===b.id}
                           style={{ padding:'4px 10px', borderRadius:'6px', border:'1px solid #FECACA', background:'#FEF2F2', color:'#DC2626', fontSize:'11px', fontWeight:600, cursor:'pointer' }}>
                           {deleting===b.id ? '...' : 'Sil'}
