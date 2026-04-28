@@ -15,8 +15,10 @@ export default function NewTeacherPage() {
   const [form, setForm] = useState({
     full_name:'', email:'', phone:'', subject:'', subject_custom:'',
     classroom_ids: [] as string[],
+    branch_id: '',
   })
   const [classrooms, setClassrooms] = useState<any[]>([])
+  const [branches, setBranches] = useState<any[]>([])
   const [saving, setSaving]   = useState(false)
   const [error, setError]     = useState('')
   const [success, setSuccess] = useState(false)
@@ -28,6 +30,8 @@ export default function NewTeacherPage() {
   useEffect(() => {
     supabase.from('classrooms').select('id, name, grade_level').order('grade_level')
       .then(({ data }) => setClassrooms(data ?? []))
+    supabase.from('branches').select('id, name').order('name')
+      .then(({ data }) => setBranches(data ?? []))
   }, [])
 
   async function handleSubmit() {
@@ -42,7 +46,7 @@ export default function NewTeacherPage() {
     const d = await res.json()
     if (!d.ok) { setError(d.error); setSaving(false); return }
     setSuccess(true)
-    setForm({ full_name:'', email:'', phone:'', subject:'', subject_custom:'', classroom_ids:[] })
+    setForm({ full_name:'', email:'', phone:'', subject:'', subject_custom:'', classroom_ids:[], branch_id:'' })
     setSaving(false)
   }
 
@@ -127,6 +131,20 @@ export default function NewTeacherPage() {
           </div>
         )}
 
+
+        <div style={{ marginBottom:'20px' }}>
+          <label style={lbl}>Sube</label>
+          {branches.length > 0 ? (
+            <select value={form.branch_id} onChange={e => setForm(p => ({ ...p, branch_id: e.target.value }))} style={inp}>
+              <option value="">Sube Secin (Opsiyonel)</option>
+              {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          ) : (
+            <div style={{ padding:'10px 12px', borderRadius:'8px', border:'1px solid #E2E8F0', background:'#F8FAFC', fontSize:'12px', color:'#94A3B8' }}>
+              Sube tanimlanmamis — <a href="/branches" style={{ color:'#1B3A6B', fontWeight:600 }}>Sube ekle</a>
+            </div>
+          )}
+        </div>
         {error && (
           <div style={{ background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:'8px', padding:'10px 14px', marginBottom:'14px', fontSize:'12.5px', color:'#C0392B' }}>{error}</div>
         )}
