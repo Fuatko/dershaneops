@@ -33,6 +33,23 @@ function ApplyForm() {
       status: 'new',
     })
     if (err) { setError('Hata: ' + err.message); setSaving(false); return }
+
+    // Admin'e WhatsApp bildirimi gonder
+    try {
+      await fetch('/api/notifications/candidate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant_id: tenantId,
+          candidate_name: form.full_name,
+          phone: form.phone,
+          grade_level: form.grade_level,
+          target_exam: form.target_exam,
+          source: form.source,
+        })
+      })
+    } catch (e) { console.error('Bildirim hatasi:', e) }
+
     setSuccess(true)
     setSaving(false)
   }
