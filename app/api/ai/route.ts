@@ -119,6 +119,18 @@ Stratejik analiz ve 3 aksiyon önerisi yaz.`
       return NextResponse.json({ analysis: text })
     }
 
+    if (type === 'candidate_score') {
+      const { candidate_name, grade_level, target_exam, source, current_school, has_parent_contact, has_email } = body
+      const text = await callClaude(
+        'Sen bir dershane kayit analisti yapay zekasisin. Adayin kayit olma olasiligini 0-100 arasinda skorkla. Sadece JSON don: {"score": 75, "notes": "kisa aciklama"}',
+        `Aday: ${candidate_name}, Sinif: ${grade_level}, Hedef: ${target_exam}, Kaynak: ${source}, Okul: ${current_school || 'belirtilmedi'}, Veli telefonu: ${has_parent_contact ? 'var' : 'yok'}, Email: ${has_email ? 'var' : 'yok'}. Kayit olasiligi skoru ver.`
+      )
+      try {
+        const d = JSON.parse(text.replace(/\`\`\`json|\`\`\`/g, '').trim())
+        return NextResponse.json(d)
+      } catch { return NextResponse.json({ score: 50, notes: 'Ortalama olasilik' }) }
+    }
+
     return NextResponse.json({ error: 'Geçersiz tip' }, { status: 400 })
 
   } catch (err: any) {

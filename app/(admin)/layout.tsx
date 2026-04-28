@@ -45,6 +45,7 @@ const navGroups = [
     { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
   ]},
   { section: 'Tanımlar', links: [
+    { href: '/candidates',   label: 'Adaylar',            icon: 'users' },
     { href: '/students',     label: 'Öğrenciler',        icon: 'students' },
     { href: '/schools',      label: 'Okullar',            icon: 'building' },
     { href: '/subjects',     label: 'Dersler',            icon: 'books' },
