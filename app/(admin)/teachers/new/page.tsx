@@ -16,9 +16,12 @@ export default function NewTeacherPage() {
     full_name:'', email:'', phone:'', subject:'', subject_custom:'',
     classroom_ids: [] as string[],
     branch_id: '',
+    institution_id: '',
   })
   const [classrooms, setClassrooms] = useState<any[]>([])
   const [branches, setBranches] = useState<any[]>([])
+  const [schools, setSchools] = useState<any[]>([])
+  const [tenantId, setTenantId] = useState('')
   const [saving, setSaving]   = useState(false)
   const [error, setError]     = useState('')
   const [success, setSuccess] = useState(false)
@@ -30,8 +33,18 @@ export default function NewTeacherPage() {
   useEffect(() => {
     supabase.from('classrooms').select('id, name, grade_level').order('grade_level')
       .then(({ data }) => setClassrooms(data ?? []))
-    supabase.from('branches').select('id, name').order('name')
+    supabase.from('branches').select('id, name, school_id').order('name')
       .then(({ data }) => setBranches(data ?? []))
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      supabase.from('profiles').select('tenant_id').eq('user_id', user.id).single()
+        .then(({ data: prof }) => {
+          if (!prof?.tenant_id) return
+          setTenantId(prof.tenant_id)
+          supabase.from('schools').select('id, name, type').eq('tenant_id', prof.tenant_id).order('name')
+            .then(({ data }) => setSchools(data ?? []))
+        })
+    })
   }, [])
 
   async function handleSubmit() {
@@ -46,7 +59,7 @@ export default function NewTeacherPage() {
     const d = await res.json()
     if (!d.ok) { setError(d.error); setSaving(false); return }
     setSuccess(true)
-    setForm({ full_name:'', email:'', phone:'', subject:'', subject_custom:'', classroom_ids:[], branch_id:'' })
+    setForm({ full_name:'', email:'', phone:'', subject:'', subject_custom:'', classroom_ids:[], branch_id:'', institution_id:'' })
     setSaving(false)
   }
 
@@ -130,6 +143,19 @@ export default function NewTeacherPage() {
             )}
           </div>
         )}
+        <div style={{ marginBottom:'20px' }}>
+          <label style={lbl}>Calistigi Kurum (Okul/Dershane)</label>
+          {schools.length > 0 ? (
+            <select value={form.institution_id} onChange={e => setForm(p => ({ ...p, institution_id: e.target.value, branch_id: '' }))} style={inp}>
+              <option value="">Secin (Opsiyonel)</option>
+              {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          ) : (
+            <div style={{ padding:'10px 12px', borderRadius:'8px', border:'1px solid #E2E8F0', background:'#F8FAFC', fontSize:'12px', color:'#94A3B8' }}>
+              Kurum tanimlanmamis — <a href="/schools" style={{ color:'#1B3A6B', fontWeight:600 }}>Kurum ekle</a>
+            </div>
+          )}
+        </div>
 
 
         <div style={{ marginBottom:'20px' }}>
