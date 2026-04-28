@@ -48,6 +48,7 @@ const navGroups = [
     { href: '/candidates',   label: 'Adaylar',            icon: 'users' },
     { href: '/students',     label: 'Öğrenciler',        icon: 'students' },
     { href: '/schools',      label: 'Okullar',            icon: 'building' },
+    { href: '/branches',     label: 'Subeler',            icon: 'building' },
     { href: '/subjects',     label: 'Dersler',            icon: 'books' },
     { href: '/topics',       label: 'Konular',            icon: 'pencil' },
     { href: '/teachers',     label: 'Öğretmenler',       icon: 'teachers' },
