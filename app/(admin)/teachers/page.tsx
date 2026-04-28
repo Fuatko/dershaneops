@@ -85,6 +85,7 @@ export default function TeachersPage() {
                 </td>
                 <td style={{ padding: '13px 16px' }}>
                   <button
+                  <a href={`/teachers/${t.id}`} style={{ padding:"6px 12px", borderRadius:"7px", border:"1px solid #BFDBFE", background:"#EFF6FF", color:"#1E40AF", fontSize:"12px", fontWeight:600, textDecoration:"none", marginRight:"6px" }}>Duzenle</a>
                     onClick={() => deleteTeacher(t.id, t.full_name)}
                     disabled={deleting === t.id}
                     style={{ padding: '6px 12px', borderRadius: '7px', border: '1px solid #FECACA', background: '#FEF2F2', color: '#C0392B', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}

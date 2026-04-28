@@ -78,6 +78,7 @@ export default function ParentsPage() {
                 <td style={{ padding: '13px 16px', fontSize: '13px', color: '#4A6080' }}>{p.phone ?? '—'}</td>
                 <td style={{ padding: '13px 16px', fontSize: '12px', color: '#7A8FA8' }}>{new Date(p.created_at).toLocaleDateString('tr-TR')}</td>
                 <td style={{ padding: '13px 16px' }}>
+                  <a href={`/parents/${p.id}`} style={{ padding:"6px 12px", borderRadius:"7px", border:"1px solid #BFDBFE", background:"#EFF6FF", color:"#1E40AF", fontSize:"12px", fontWeight:600, textDecoration:"none", marginRight:"6px" }}>Duzenle</a>
                   <button onClick={() => deleteParent(p.id, p.full_name)} disabled={deleting === p.id} style={{ padding: '6px 12px', borderRadius: '7px', border: '1px solid #FECACA', background: '#FEF2F2', color: '#C0392B', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>
                     {deleting === p.id ? '...' : 'Sil'}
                   </button>
