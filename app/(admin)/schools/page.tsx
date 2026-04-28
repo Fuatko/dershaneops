@@ -78,10 +78,10 @@ export default function SchoolsPage() {
     setDeleting(null)
   }
 
-  if (loading) return <div style={{ padding:'40px', textAlign:'center', color:'#94A3B8' }}>Yukleniyor...</div>
-
   const inp = { width:'100%', padding:'9px 12px', borderRadius:'8px', border:'1px solid #E2E8F0', fontSize:'13px', color:'#1B3A6B', outline:'none', boxSizing:'border-box' as any }
   const lbl = { display:'block', fontSize:'11px', fontWeight:600 as any, color:'#475569', marginBottom:'5px' }
+  if (loading) return <div style={{ padding:'40px', textAlign:'center', color:'#94A3B8' }}>Yukleniyor...</div>
+
 
   return (
     <div style={{ padding:'24px 20px', maxWidth:'900px', fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif' }}>
